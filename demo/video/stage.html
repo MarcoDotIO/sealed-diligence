@@ -5,146 +5,365 @@
 <title>Sealed Diligence demo stage</title>
 <style>
   @font-face { font-family: "Archivo"; src: url("archivo.woff2") format("woff2"); font-weight: 100 900; font-stretch: 62% 125%; }
-  :root { --paper:#e8ebee; --sheet:#f6f7f8; --ink:#1e2128; --muted:#5b6270; --rule:#c8cdd4; --cobalt:#2443c9; --void:#cc2a2f; --pass:#1d7a4c; --graphite:#23262d; --term-text:#e6e8ec; --term-muted:#8d95a3; --term-ok:#5fd39b; --term-bad:#ff7b7f; --term-hi:#9fb1ff; }
+  :root {
+    --paper:#e8ebee; --sheet:#f6f7f8; --ink:#1e2128; --muted:#5b6270; --rule:#c8cdd4; --cobalt:#2443c9; --void:#cc2a2f; --pass:#1d7a4c;
+    /* VS Code Dark+ */
+    --ed-bg:#1e1e1e; --ed-side:#252526; --ed-act:#333333; --ed-title:#323233; --ed-line:#858585; --ed-text:#d4d4d4;
+    --tk-com:#6a9955; --tk-str:#ce9178; --tk-kw:#569cd6; --tk-ctl:#c586c0; --tk-num:#b5cea8; --tk-fn:#dcdcaa; --tk-var:#9cdcfe; --tk-type:#4ec9b0;
+  }
   * { box-sizing: border-box; margin: 0; }
   html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--paper); color: var(--ink); font-family: "Archivo", sans-serif; }
-  .scene { position: absolute; inset: 0; opacity: 0; }
-  .brand { position: absolute; top: 38px; left: 64px; display: flex; align-items: center; gap: 14px; font-stretch: 125%; font-weight: 760; font-size: 24px; }
+  .scene { position: absolute; inset: 0; opacity: 0; overflow: hidden; }
+  .brand { position: absolute; top: 36px; left: 64px; display: flex; align-items: center; gap: 14px; font-stretch: 125%; font-weight: 760; font-size: 24px; z-index: 5; }
   .brand img { width: 40px; height: 40px; }
-  .step { position: absolute; top: 40px; right: 64px; display: flex; align-items: baseline; gap: 14px; font-size: 24px; color: var(--muted); }
+  .step { position: absolute; top: 38px; right: 64px; display: flex; align-items: baseline; gap: 14px; font-size: 24px; color: var(--muted); z-index: 5; }
   .step b { font-stretch: 125%; font-weight: 800; font-size: 34px; color: var(--cobalt); }
+  .subtitle { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); width: max-content; max-width: 1500px; text-align: center; font-size: 30px; line-height: 1.32; font-weight: 520; color: #fff; background: rgba(20,22,27,.86); padding: 10px 22px; border-radius: 8px; z-index: 20; }
+  .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; }
 
-  .title { position: absolute; left: 140px; right: 140px; top: 170px; }
-  .title h1 { font-stretch: 125%; font-weight: 800; font-size: 104px; line-height: 0.98; letter-spacing: -0.03em; max-width: 15ch; }
-  .title p { margin-top: 30px; font-size: 34px; color: var(--muted); max-width: 46ch; }
-  .facts { position: absolute; left: 140px; right: 140px; bottom: 120px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; border-top: 3px solid var(--ink); padding-top: 26px; }
-  .facts b { display: block; font-stretch: 112%; font-weight: 760; font-size: 30px; margin-bottom: 8px; }
-  .facts span { font-size: 25px; color: var(--muted); line-height: 1.35; }
+  /* Editor */
+  .editor { position: absolute; background: var(--ed-bg); border-radius: 10px; overflow: hidden; box-shadow: 0 40px 90px -40px rgba(10,12,18,.7), 0 0 0 1px rgba(0,0,0,.4); transform-origin: 50% 40%; }
+  .ed-title { height: 38px; background: var(--ed-title); color: #cccccc; font: 15px -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; position: relative; }
+  .ed-title .dots { position: absolute; left: 14px; display: flex; gap: 8px; } .ed-title .dots i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .ed-title .dots i:nth-child(1){background:#ff5f57} .ed-title .dots i:nth-child(2){background:#febc2e} .ed-title .dots i:nth-child(3){background:#28c840}
+  .ed-body { position: absolute; top: 38px; bottom: 26px; left: 0; right: 0; display: flex; }
+  .ed-act { width: 52px; background: var(--ed-act); }
+  .ed-act i { display: block; width: 26px; height: 26px; margin: 16px auto 0; border: 2px solid #858585; border-radius: 4px; opacity: .8; }
+  .ed-act i:first-child { border-color: #fff; }
+  .ed-side { width: 250px; background: var(--ed-side); color: #cccccc; font: 15px/1 -apple-system, sans-serif; padding-top: 12px; }
+  .ed-side .head { font-size: 12px; letter-spacing: .06em; color: #bbbbbb; padding: 6px 18px 12px; }
+  .ed-side .item { padding: 6px 0; white-space: nowrap; }
+  .ed-side .item.sel { background: #37373d; color: #fff; }
+  .ed-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .ed-tabs { height: 40px; background: var(--ed-side); display: flex; }
+  .ed-tab { padding: 0 18px; display: flex; align-items: center; gap: 8px; color: #969696; font: 15px -apple-system, sans-serif; border-right: 1px solid #1e1e1e; }
+  .ed-tab.on { background: var(--ed-bg); color: #fff; border-top: 2px solid var(--cobalt); }
+  .ed-tab .ic { font: 700 11px ui-monospace, monospace; color: #519aba; }
+  .ed-tab .ic.md { color: #519aba; } .ed-tab .ic.json { color: #cbcb41; }
+  .ed-code { position: relative; flex: 1; padding-top: 12px; font: 21px/34px "SF Mono", ui-monospace, Menlo, monospace; color: var(--ed-text); white-space: pre; }
+  .ed-pane { position: absolute; inset: 12px 0 0 0; }
+  .ln { display: flex; height: 34px; position: relative; transition: none; }
+  .ln .no { width: 64px; text-align: right; padding-right: 22px; color: var(--ed-line); flex: none; }
+  .ln .tx { position: relative; }
+  .ln .hl { position: absolute; left: 0; right: 0; top: 0; bottom: 0; background: rgba(204,42,47,.28); border-left: 4px solid #ff5a5f; opacity: 0; }
+  .ln .sel { background: #264f78; }
+  .ed-status { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; background: var(--cobalt); color: #fff; font: 14px -apple-system, sans-serif; display: flex; align-items: center; gap: 22px; padding: 0 14px; }
+  .c-com{color:var(--tk-com)} .c-str{color:var(--tk-str)} .c-kw{color:var(--tk-kw)} .c-ctl{color:var(--tk-ctl)} .c-num{color:var(--tk-num)} .c-fn{color:var(--tk-fn)} .c-var{color:var(--tk-var)} .c-type{color:var(--tk-type)}
+  .c-h{color:var(--tk-kw);font-weight:700} .c-b{color:var(--tk-ctl);font-weight:700} .c-pipe{color:#6b6b6b}
+  .cursor { display: inline-block; width: 2px; height: 26px; background: #aeafad; vertical-align: -5px; }
 
-  .tape { position: absolute; left: -80px; right: -80px; height: 92px; transform: rotate(-2.2deg); background: var(--cobalt); color: var(--sheet); display: flex; align-items: center; white-space: nowrap; overflow: hidden; box-shadow: 0 16px 30px -18px rgba(0,0,0,.5); }
+  /* Tape */
+  .tape { position: absolute; height: 92px; background: var(--cobalt); color: var(--sheet); display: flex; align-items: center; white-space: nowrap; overflow: hidden; box-shadow: 0 18px 30px -16px rgba(0,0,0,.55); z-index: 6; }
   .tape::before, .tape::after { content: ""; position: absolute; left: 0; right: 0; height: 4px; background: repeating-linear-gradient(90deg, var(--sheet) 0 20px, transparent 20px 36px); opacity: .55; }
   .tape::before { top: 9px; } .tape::after { bottom: 9px; }
   .tape span { font-stretch: 125%; font-weight: 800; font-size: 30px; letter-spacing: .06em; text-transform: uppercase; padding-left: 40px; }
+  .tape.void { background-color: var(--void); }
 
-  .window { position: absolute; left: 140px; top: 120px; width: 1640px; height: 770px; border-radius: 10px; overflow: hidden; box-shadow: 0 30px 80px -30px rgba(20,24,32,.55), 0 0 0 1px rgba(30,33,40,.12); }
-  .terminal { background: var(--graphite); }
-  .browser { background: var(--sheet); }
-  .bar { height: 46px; display: flex; align-items: center; padding: 0 18px; gap: 8px; font-size: 17px; }
-  .terminal .bar { color: var(--term-muted); border-bottom: 1px solid #343842; }
-  .browser .bar { color: var(--muted); border-bottom: 1px solid var(--rule); background: #eef0f2; }
-  .bar i { width: 13px; height: 13px; border-radius: 50%; background: #50555f; display: inline-block; }
-  .browser .bar i { background: #c3c8cf; }
-  .bar span { margin-left: 14px; }
-  .url { flex: 1; margin-left: 18px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; height: 30px; display: flex; align-items: center; padding: 0 12px; }
-  .term { padding: 26px 34px; color: var(--term-text); font: 27px/1.45 "SF Mono", ui-monospace, Menlo, monospace; white-space: pre; }
-  .term .cmd::before { content: "$ "; color: var(--term-ok); }
-  .ok { color: var(--term-ok); } .bad { color: var(--term-bad); } .dim { color: var(--term-muted); } .hi { color: var(--term-hi); }
-  .cursor { display: inline-block; width: 13px; height: 27px; background: var(--term-text); vertical-align: -4px; }
-  .shot { position: absolute; left: 0; right: 0; top: 46px; bottom: 0; overflow: hidden; }
-  .shot img { position: absolute; left: 0; width: 100%; }
+  /* Headlines on paper */
+  .headline { position: absolute; font-stretch: 125%; font-weight: 800; letter-spacing: -0.03em; line-height: .98; }
+  .note { position: absolute; font-size: 30px; color: var(--muted); line-height: 1.35; }
 
-  .caption { position: absolute; left: 140px; bottom: 50px; max-width: 1640px; font-size: 32px; line-height: 1.3; font-weight: 500; }
+  /* Slip */
+  .slip { position: absolute; left: 330px; top: 140px; width: 1260px; height: 780px; background: var(--sheet); border-radius: 6px; box-shadow: 0 40px 80px -40px rgba(20,24,32,.45), 0 0 0 1px rgba(30,33,40,.08); padding: 56px 64px; }
+  .slip .kind { font-size: 24px; color: var(--muted); }
+  .slip .method { font-family: "SF Mono", ui-monospace, monospace; font-size: 64px; font-weight: 700; margin-top: 6px; letter-spacing: -0.02em; }
+  .slip .on { font-size: 26px; color: var(--muted); margin-top: 6px; }
+  .slip dl { margin-top: 36px; display: grid; grid-template-columns: 260px 1fr; row-gap: 0; border-top: 2px solid var(--ink); }
+  .slip dt, .slip dd { padding: 14px 0; border-bottom: 1px solid var(--rule); font-size: 26px; }
+  .slip dt { color: var(--muted); }
+  .slip dd { font-family: "SF Mono", ui-monospace, monospace; font-size: 21px; }
+  .slip dd.fee { font-family: "Archivo"; font-size: 30px; font-weight: 760; font-stretch: 112%; }
+  .slip .row { opacity: 0; }
+  .slip .tx { position: absolute; left: 64px; right: 64px; bottom: 44px; display: flex; justify-content: space-between; align-items: center; font-size: 22px; color: var(--muted); }
+  .slip .tx code { font-family: "SF Mono", ui-monospace, monospace; color: var(--ink); }
+  .pill { display: inline-block; padding: 8px 18px; border-radius: 40px; font-weight: 700; font-size: 22px; border: 2px solid currentColor; }
+  .slip .checks { margin-top: 26px; opacity: 0; }
+  .slip .checks div { font-size: 23px; padding: 10px 0 10px 40px; position: relative; border-bottom: 1px solid var(--rule); line-height: 1.3; opacity: 0; }
+  .slip .checks div::before { content: "✓"; position: absolute; left: 4px; color: var(--pass); font-weight: 800; }
+  .slip .checks h4 { font-size: 20px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  .stamp { position: absolute; right: 90px; top: 74px; font-stretch: 125%; font-weight: 800; font-size: 64px; letter-spacing: .08em; color: var(--cobalt); border: 6px solid var(--cobalt); padding: 8px 26px; transform: rotate(-9deg); opacity: 0; mix-blend-mode: multiply; }
+
+  /* Review */
+  .panel-title { font-stretch: 112%; font-weight: 760; font-size: 30px; margin-bottom: 14px; }
+  .att div, .ans .r { font-size: 24px; opacity: 0; }
+  .att div { padding: 9px 0 9px 38px; position: relative; border-bottom: 1px solid var(--rule); }
+  .att div::before { content: "✓"; position: absolute; left: 4px; color: var(--pass); font-weight: 800; }
+  .ans .r { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .ans .r code { font-family: "SF Mono", ui-monospace, monospace; font-size: 23px; }
+  .ans .r .risk { font-weight: 760; font-size: 21px; text-transform: lowercase; }
+  .ans .r .risk.critical, .ans .r .risk.high { color: var(--void); } .ans .r .risk.low, .ans .r .risk.none { color: var(--muted); }
+  .ans .r small { color: var(--muted); font-size: 19px; }
+  .ans .r .sig { font-family: "SF Mono", ui-monospace, monospace; font-size: 18px; color: var(--cobalt); text-align: right; }
+  .ans .r.seal { border-bottom: 0; border-top: 3px solid var(--ink); margin-top: 6px; }
+  .ans .r.seal b { color: var(--void); font-stretch: 112%; font-size: 30px; }
+  .side-cap { position: absolute; font-size: 22px; color: var(--muted); }
+
+  /* Browser shot with camera */
+  .browser { position: absolute; left: 140px; top: 110px; width: 1640px; height: 800px; background: var(--sheet); border-radius: 10px; overflow: hidden; box-shadow: 0 40px 90px -40px rgba(20,24,32,.55), 0 0 0 1px rgba(30,33,40,.12); }
+  .browser .bar { height: 46px; display: flex; align-items: center; padding: 0 18px; gap: 8px; background: #eef0f2; border-bottom: 1px solid var(--rule); color: var(--muted); font-size: 17px; }
+  .browser .bar i { width: 13px; height: 13px; border-radius: 50%; background: #c3c8cf; display: inline-block; }
+  .browser .url { flex: 1; margin-left: 18px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; height: 30px; display: flex; align-items: center; padding: 0 12px; }
+  .browser .view { position: absolute; left: 0; right: 0; top: 46px; bottom: 0; overflow: hidden; }
+  .browser .view img { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .ring { position: absolute; border: 4px solid var(--void); border-radius: 8px; opacity: 0; box-shadow: 0 0 0 9999px rgba(20,22,27,.08); }
+  .inset { position: absolute; width: 900px; overflow: hidden; background: var(--ed-bg); border-radius: 10px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.6); padding: 14px 0; opacity: 0; z-index: 8; }
+  .inset .cap { font: 15px -apple-system, sans-serif; color: #969696; padding: 0 18px 10px; }
+  .inset .ln { font: 19px/32px "SF Mono", ui-monospace, monospace; height: 32px; white-space: pre; color: var(--ed-text); overflow: hidden; }
+  .inset .ln .tx { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; padding-right: 16px; }
+  .inset .cap { font-size: 17px; }
+  .inset .ln .no { width: 52px; padding-right: 16px; }
+  .inset .ln .hl { opacity: 1; }
+
+  .facts { position: absolute; left: 140px; right: 140px; bottom: 120px; display: flex; gap: 64px; border-top: 3px solid var(--ink); padding-top: 24px; font-size: 28px; }
+  .facts span { color: var(--muted); }
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script>
 // window.TIMELINE is injected by make-video.ts; window.render(t) draws the frame at time t (seconds).
-const FADE = 0.45;
-const CHARS_PER_SECOND = 40;
-const AFTER_COMMAND = 0.35;
-const SHOT_VIEW_HEIGHT = 724;
-const WINDOW_WIDTH = 1640;
-const TAPE_REPEATS = 6;
+const FADE = 0.4;
+const ED_LINE = 34;
 const root = document.getElementById("root");
 const built = [];
 
-const escapeHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const ease = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+const after = (local, at, dur = 0.4) => clamp01((local - at) / dur);
+const lerp = (a, b, p) => a + (b - a) * p;
 
-function lineClass(text) {
-  if (/NOT VERIFIED|^\s*✗|do_not_proceed|AI CODE REVIEWER|Ignore previous|_live_/.test(text)) return "bad";
-  if (/^\s*✓|VERIFIED$|"Fulfilled"/.test(text)) return "ok";
-  if (/^https:|EVENT_JSON|enclave attested/.test(text)) return "hi";
-  if (/^\s*\[\d+\/\d+\]|^commit |^\s*sealed$|^wrote /.test(text)) return "dim";
-  return "";
+/* ---------- syntax highlighting (Dark+ palette) ---------- */
+const TS = /(\/\/.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|\b(import|from|export|default|return|if|await|async)\b|\b(const|let|new|function)\b|\b(\d+)\b|([A-Za-z_$][\w$]*)(?=\s*\()|([A-Za-z_$][\w$]*)/g;
+function highlightTs(line) {
+  let out = "", last = 0;
+  line.replace(TS, (m, com, str, ctl, kw, num, fn, ident, idx) => {
+    out += esc(line.slice(last, idx));
+    const cls = com ? "c-com" : str ? "c-str" : ctl ? "c-ctl" : kw ? "c-kw" : num ? "c-num" : fn ? "c-fn" : /^[A-Z]/.test(ident) ? "c-type" : "c-var";
+    out += `<span class="${cls}">${esc(m)}</span>`;
+    last = idx + m.length;
+    return m;
+  });
+  return out + esc(line.slice(last));
+}
+function highlightMd(line) {
+  if (/^#/.test(line)) return `<span class="c-h">${esc(line)}</span>`;
+  return esc(line).replace(/\*\*(.+?)\*\*/g, '<span class="c-b">**$1**</span>').replace(/\|/g, '<span class="c-pipe">|</span>').replace(/`([^`]+)`/g, '<span class="c-str">`$1`</span>');
+}
+const highlight = (lang, line) => (lang === "md" ? highlightMd(line) : highlightTs(line));
+
+/* ---------- editor ---------- */
+function editorHtml(ed) {
+  const tree = ed.tree.map((n) => `<div class="item${n.sel ? " sel" : ""}" style="padding-left:${18 + n.depth * 16}px">${n.dir ? "⌄ " : ""}${esc(n.name)}</div>`).join("");
+  const tabs = ed.files.map((f, i) => `<div class="ed-tab" data-i="${i}"><span class="ic ${f.lang}">${f.lang === "md" ? "M↓" : f.lang === "json" ? "{}" : "TS"}</span>${esc(f.name)}</div>`).join("");
+  const panes = ed.files.map((f, i) => `<div class="ed-pane" data-i="${i}">${f.lines.map((l, n) => `<div class="ln" data-n="${n + 1}"><span class="no">${n + 1}</span><span class="tx">${highlight(f.lang, l)}</span><span class="hl"></span></div>`).join("")}</div>`).join("");
+  return `<div class="editor" style="left:${ed.x}px;top:${ed.y}px;width:${ed.w}px;height:${ed.h}px">
+    <div class="ed-title"><span class="dots"><i></i><i></i><i></i></span><span class="title-text"></span></div>
+    <div class="ed-body"><div class="ed-act"><i></i><i></i><i></i></div><div class="ed-side"><div class="head">EXPLORER: ACME-ORDERS</div>${tree}</div>
+    <div class="ed-main"><div class="ed-tabs">${tabs}</div><div class="ed-code">${panes}</div></div></div>
+    <div class="ed-status"><span>⎇ main</span><span class="st-file"></span><span style="margin-left:auto">Ln 1, Col 1</span><span>UTF-8</span></div></div>`;
+}
+function setActiveFile(el, ed, i) {
+  el.querySelectorAll(".ed-tab").forEach((t) => t.classList.toggle("on", Number(t.dataset.i) === i));
+  el.querySelectorAll(".ed-pane").forEach((p) => (p.style.display = Number(p.dataset.i) === i ? "block" : "none"));
+  el.querySelector(".title-text").textContent = `${ed.files[i].name} — acme-orders`;
+  el.querySelector(".st-file").textContent = ed.files[i].lang === "md" ? "Markdown" : ed.files[i].lang === "json" ? "JSON" : "TypeScript";
+  el.querySelectorAll(".ed-side .item").forEach((n) => n.classList.toggle("sel", n.textContent.trim().endsWith(ed.files[i].name)));
 }
 
-function tape(scene) {
-  if (!scene.tape) return "";
-  const text = Array(TAPE_REPEATS).fill(escapeHtml(scene.tape)).join("  ◆  ");
-  return `<div class="tape" style="top:${scene.tapeTop ?? 640}px"><span>${text}</span></div>`;
-}
+/* ---------- builders ---------- */
+const brandHtml = () => `<div class="brand"><img src="mark.svg" alt="">Sealed Diligence</div>`;
+const stepHtml = (s) => (s.step ? `<div class="step"><b>${s.step[0]}</b>${esc(s.step[1])}</div>` : "");
+const tapeHtml = (text, style, cls = "") => `<div class="tape ${cls}" style="${style}"><span>${Array(8).fill(esc(text)).join("  ◆  ")}</span></div>`;
 
-function chrome(scene) {
-  const brand = `<div class="brand"><img src="mark.svg" alt="">Sealed Diligence</div>`;
-  const step = scene.step ? `<div class="step"><b>${scene.step[0]}</b>${escapeHtml(scene.step[1])}</div>` : "";
-  return brand + step;
-}
+const BUILD = {
+  editorHook: (s) => editorHtml(s.editor),
+  split: (s) => editorHtml(s.editor) + tapeHtml(s.tape, "left:-140px;width:1150px;top:500px") +
+    `<div class="headline" style="left:1060px;top:300px;font-size:92px;max-width:12ch">${esc(s.headline)}</div><div class="note" style="left:1064px;top:640px;max-width:24ch">${esc(s.note)}</div>`,
+  slip: (s) => {
+    const rows = s.rows.map(([k, v, cls]) => `<dt class="row">${esc(k)}</dt><dd class="row ${cls ?? ""}">${esc(v)}</dd>`).join("");
+    const checks = s.checks ? `<div class="checks"><h4>The contract checked</h4>${s.checks.map((c) => `<div>${esc(c)}</div>`).join("")}</div>` : "";
+    return `<div class="slip"><div class="kind">NEAR testnet transaction</div><div class="method">${esc(s.method)}</div><div class="on">on ${esc(s.contract)}, signed by ${esc(s.signer)}</div>
+      <dl>${rows}</dl>${checks}<div class="tx"><span>Transaction <code class="txh"></code></span><span class="pill status"></span></div>${s.stamp ? `<div class="stamp">${esc(s.stamp)}</div>` : ""}</div>` +
+      tapeHtml(s.tape, "left:1020px;width:760px;top:96px;height:74px", "tab");
+  },
+  review: (s) => {
+    const att = s.attestation.map((a) => `<div>${esc(a)}</div>`).join("");
+    const ans = s.answers.map((a) => `<div class="r${a.seal ? " seal" : ""}">${a.seal ? `<b>${esc(a.title)}</b>` : `<code>${esc(a.path)}</code>`}<span class="sig">sig ${esc(a.sig)}</span>${a.seal ? `<small>${esc(a.detail)}</small>` : `<small><span class="risk ${a.risk}">${esc(a.risk)}</span>, ${esc(a.detail)}</small>`}<span></span></div>`).join("");
+    return editorHtml(s.editor) + tapeHtml("Source stays on this side", "left:530px;width:960px;top:500px;height:72px;transform:rotate(-89deg)") +
+      `<div style="position:absolute;left:1110px;top:130px;width:740px"><div class="panel-title">Enclave attestation</div><div class="att">${att}</div><div class="panel-title" style="margin-top:28px">Signed answers</div><div class="ans">${ans}</div></div>` +
+      "";
+  },
+  shot: (s) => `<div class="browser"><div class="bar"><i></i><i></i><i></i><div class="url">${esc(s.url)}</div></div><div class="view"><img src="${s.image}">${(s.rings ?? []).map(() => '<div class="ring"></div>').join("")}</div></div>` +
+    (s.inset ? `<div class="inset" style="left:${s.inset.x}px;top:${s.inset.y}px"><div class="cap">${esc(s.inset.caption)}</div>${s.inset.lines.map((l) => `<div class="ln"><span class="no">${l.n}</span><span class="tx">${highlightTs(l.text)}</span><span class="hl"></span></div>`).join("")}</div>` : ""),
+  tamper: (s) => editorHtml(s.editor) + `<div class="cut" style="position:absolute;inset:0;opacity:0">${BUILD.shot({ ...s.shot })}</div><div class="flash"></div>`,
+  outro: (s) => `<div class="headline" style="left:140px;top:200px;font-size:110px;max-width:14ch">${esc(s.headline)}</div>` +
+    tapeHtml(s.tape, "left:-80px;right:-80px;top:560px;transform:rotate(-2.2deg)") +
+    `<div class="facts">${s.facts.map((f) => `<div><span>${esc(f[0])}</span><br>${esc(f[1])}</div>`).join("")}</div>`,
+};
 
-function windowHtml(scene) {
-  if (scene.type === "terminal") {
-    return `<div class="window terminal"><div class="bar"><i></i><i></i><i></i><span>${escapeHtml(scene.windowTitle ?? "terminal")}</span></div><div class="term"></div></div>`;
-  }
-  return `<div class="window browser"><div class="bar"><i></i><i></i><i></i><div class="url">${escapeHtml(scene.url)}</div></div><div class="shot"><img src="${scene.image}"></div></div>`;
-}
-
-function titleHtml(scene) {
-  const sub = scene.sub ? `<p>${scene.sub}</p>` : "";
-  const facts = scene.facts ? `<div class="facts">${scene.facts.map(([k, v]) => `<div><b>${k}</b><span>${v}</span></div>`).join("")}</div>` : "";
-  return `<div class="title"><h1>${scene.html}</h1>${sub}</div>${tape(scene)}${facts}`;
-}
-
-function build(scene) {
+function build(s) {
   const el = document.createElement("div");
   el.className = "scene";
-  const body = scene.type === "title" ? (scene.brand ? chrome({}) : "") + titleHtml(scene) : chrome(scene) + windowHtml(scene);
-  el.innerHTML = body + (scene.caption ? `<div class="caption">${scene.caption}</div>` : "");
+  el.innerHTML = (s.type === "editorHook" ? "" : brandHtml() + stepHtml(s)) + BUILD[s.type](s) + (s.subtitle ? `<div class="subtitle">${esc(s.subtitle)}</div>` : "");
   root.appendChild(el);
   return el;
 }
 
-/** Commands type out; output lines appear one after another. */
-function terminalAt(scene, local) {
-  let clock = 0.3;
-  const out = [];
-  for (const line of scene.lines) {
-    if (clock > local) break;
-    if (line.startsWith("$ ")) {
-      const text = line.slice(2);
-      const typed = Math.floor((local - clock) * CHARS_PER_SECOND);
-      const cursor = typed < text.length ? '<span class="cursor"></span>' : "";
-      out.push(`<span class="cmd">${escapeHtml(text.slice(0, typed))}</span>${cursor}`);
-      clock += text.length / CHARS_PER_SECOND + AFTER_COMMAND;
-    } else {
-      out.push(`<span class="${lineClass(line)}">${escapeHtml(line)}</span>`);
-      clock += scene.lineGap ?? 0.09;
-    }
+/* ---------- per-type animation ---------- */
+function camera(view, img, s, local) {
+  const keys = s.camera;
+  let k = keys[keys.length - 1], p = 1, from = keys[keys.length - 1];
+  for (let i = 1; i < keys.length; i++) {
+    if (local < keys[i].t) { from = keys[i - 1]; k = keys[i]; p = ease(clamp01((local - from.t) / (k.t - from.t))); break; }
   }
-  return out.slice(-(scene.maxLines ?? 15)).join("\n");
+  const cx = lerp(from.cx, k.cx, p), cy = lerp(from.cy, k.cy, p), sc = lerp(from.s, k.s, p);
+  const vw = view.clientWidth, vh = view.clientHeight, W = img.naturalWidth, H = img.naturalHeight;
+  const base = (vw / W) * sc;
+  let left = vw / 2 - cx * base, top = vh / 2 - cy * base;
+  left = Math.min(0, Math.max(vw - W * base, left));
+  top = Math.min(0, Math.max(vh - H * base, top));
+  img.style.transform = `translate(${left}px, ${top}px) scale(${base})`;
+  return (x, y) => [left + x * base, top + y * base, base];
 }
 
-function panShot(el, scene, local) {
-  const img = el.querySelector(".shot img");
-  const progress = ease(clamp01((local - (scene.panStart ?? 1)) / (scene.panDur ?? 4)));
-  const maxShift = Math.max(0, img.naturalHeight * (WINDOW_WIDTH / img.naturalWidth) - SHOT_VIEW_HEIGHT);
-  const from = Math.min(maxShift, scene.panFrom ?? 0);
-  const to = Math.min(maxShift, scene.panPx ?? maxShift);
-  img.style.top = `${-(from + progress * (to - from))}px`;
+function animateShot(el, s, local) {
+  const view = el.querySelector(".view"), img = view.querySelector("img");
+  const map = camera(view, img, s, local);
+  (s.rings ?? []).forEach((r, i) => {
+    const ring = view.querySelectorAll(".ring")[i];
+    const [x, y, b] = map(r.rect[0], r.rect[1]);
+    Object.assign(ring.style, { left: `${x - 10}px`, top: `${y - 8}px`, width: `${r.rect[2] * b + 20}px`, height: `${r.rect[3] * b + 16}px`, opacity: String(Math.min(after(local, r.from), 1 - after(local, r.to ?? 99))) });
+  });
+  const inset = el.querySelector(".inset");
+  if (inset && s.inset) {
+    const p = easeOut(after(local, s.inset.at, 0.5)) * (1 - after(local, s.inset.to ?? 99, 0.4));
+    inset.style.opacity = String(p);
+    inset.style.transform = `translateX(${(1 - p) * 60}px)`;
+  }
 }
+
+function animateEditor(el, ed, local) {
+  const active = ed.switches ? ed.switches.filter((w) => local >= w.at).map((w) => w.file).pop() ?? ed.active : ed.active;
+  setActiveFile(el, ed, active);
+  const editor = el.querySelector(".editor");
+  if (ed.push) editor.style.transform = `scale(${lerp(1, ed.push.to, ease(clamp01(local / ed.push.dur)))})`;
+  for (const h of ed.highlights ?? []) {
+    if (h.file !== active) continue;
+    const pane = el.querySelector(`.ed-pane[data-i="${h.file}"]`);
+    const p = after(local, h.at, 0.5);
+    pane.querySelectorAll(".ln").forEach((ln) => {
+      const n = Number(ln.dataset.n);
+      const on = h.lines.includes(n);
+      ln.querySelector(".hl").style.opacity = on ? String(p) : "0";
+      ln.style.opacity = on ? "1" : String(1 - p * (h.dim ?? 0.6));
+    });
+  }
+  if (ed.typing) typeIn(el, ed, local);
+}
+
+/** Select the old text on one line, then type the replacement character by character. */
+function typeIn(el, ed, local) {
+  const { file, line, find, replace, selectAt, typeAt } = ed.typing;
+  const ln = el.querySelector(`.ed-pane[data-i="${file}"] .ln[data-n="${line}"] .tx`);
+  const src = ed.files[file].lines[line - 1];
+  const i = src.indexOf(find);
+  const typed = Math.max(0, Math.min(replace.length, Math.floor((local - typeAt) / 0.28) + 1));
+  const before = esc(src.slice(0, i)), afterText = esc(src.slice(i + find.length));
+  if (local < selectAt) ln.innerHTML = highlightMd(src);
+  else if (local < typeAt) ln.innerHTML = `${before}<span class="sel">${esc(find)}</span>${afterText}`;
+  else ln.innerHTML = `${before}<span class="c-b">${esc(replace.slice(0, typed))}</span><span class="cursor"></span>${afterText}`;
+}
+
+function animateSlip(el, s, local) {
+  el.querySelectorAll(".slip .row").forEach((r, i) => {
+    const p = s.rowsFrom === 0 ? 1 : easeOut(after(local, 0.6 + Math.floor(i / 2) * s.rowGap, 0.35));
+    r.style.opacity = String(p);
+    r.style.transform = `translateY(${(1 - p) * 12}px)`;
+  });
+  const tab = el.querySelector(".tape.tab");
+  const tp = easeOut(after(local, s.tapeAt, 0.25));
+  tab.style.opacity = String(tp > 0 ? 1 : 0);
+  tab.style.transform = `rotate(-4deg) scale(${lerp(1.25, 1, tp)})`;
+  const txAt = s.txAt ?? s.tapeAt;
+  el.querySelector(".txh").textContent = local >= txAt ? s.tx : "";
+  const status = el.querySelector(".status");
+  const st = s.statuses.filter((x) => local >= x.at).pop();
+  status.textContent = st ? st.text : "";
+  status.style.color = st?.color ?? "var(--muted)";
+  const checks = el.querySelector(".slip .checks");
+  if (checks) {
+    checks.style.opacity = String(after(local, s.checksAt, 0.4));
+    checks.querySelectorAll("div").forEach((d, i) => (d.style.opacity = String(after(local, s.checksAt + 0.5 + i * 0.7, 0.3))));
+  }
+  const fee = el.querySelector("dd.fee");
+  if (fee && s.feePaid && local >= s.feePaid.at) fee.textContent = s.feePaid.text;
+  const stamp = el.querySelector(".stamp");
+  if (stamp) {
+    const p = easeOut(after(local, s.stampAt, 0.18));
+    stamp.style.opacity = String(p);
+    stamp.style.transform = `rotate(-9deg) scale(${lerp(1.6, 1, p)})`;
+  }
+}
+
+function animateReview(el, s, local) {
+  animateEditor(el, s.editor, local);
+  el.querySelectorAll(".att div").forEach((d, i) => (d.style.opacity = String(after(local, s.attAt[i], 0.3))));
+  el.querySelectorAll(".ans .r").forEach((r, i) => {
+    const p = easeOut(after(local, s.answerAt[i], 0.35));
+    r.style.opacity = String(p);
+    r.style.transform = `translateX(${(1 - p) * -40}px)`;
+  });
+}
+
+function animateSplit(el, s, local) {
+  const editor = el.querySelector(".editor");
+  const p = ease(after(local, 0.2, 0.9));
+  editor.style.transformOrigin = "0 0";
+  editor.style.transform = `translate(${lerp(0, -40, p)}px, ${lerp(0, 150, p)}px) scale(${lerp(1, 0.56, p)})`;
+  editor.style.filter = `blur(${after(local, s.tapeAt, 0.5) * 5}px)`;
+  const tape = el.querySelector(".tape");
+  const tp = easeOut(after(local, s.tapeAt, 0.22));
+  tape.style.opacity = String(tp > 0 ? 1 : 0);
+  tape.style.transform = `rotate(-9deg) scale(${lerp(1.3, 1, tp)})`;
+  el.querySelectorAll(".headline, .note").forEach((h, i) => {
+    const q = easeOut(after(local, s.headlineAt + i * 0.6, 0.6));
+    h.style.opacity = String(q);
+    h.style.transform = `translateY(${(1 - q) * 24}px)`;
+  });
+}
+
+function animateTamper(el, s, local) {
+  animateEditor(el, s.editor, local);
+  const cut = el.querySelector(".cut");
+  cut.style.opacity = local >= s.cutAt ? "1" : "0";
+  el.querySelector(".flash").style.opacity = String(local >= s.cutAt && local < s.cutAt + 0.09 ? 0.85 : 0);
+  if (local >= s.cutAt) animateShot(cut, s.shot, local - s.cutAt);
+}
+
+function animateOutro(el, s, local) {
+  const tape = el.querySelector(".tape");
+  tape.style.clipPath = `inset(0 ${100 - 100 * ease(after(local, 0.5, 0.7))}% 0 0)`;
+}
+
+const ANIMATE = {
+  editorHook: (el, s, local) => animateEditor(el, s.editor, local),
+  split: animateSplit,
+  slip: animateSlip,
+  review: animateReview,
+  shot: animateShot,
+  tamper: animateTamper,
+  outro: animateOutro,
+};
 
 window.render = (t) => {
-  window.TIMELINE.forEach((scene, i) => {
-    const el = (built[i] ??= build(scene));
-    const local = t - scene.start;
-    const visible = local >= -FADE && local <= scene.dur;
-    el.style.opacity = visible ? String(Math.min(clamp01(local / FADE + 1), clamp01((scene.dur - local) / FADE))) : "0";
-    if (!visible) return;
-    if (scene.type === "terminal") el.querySelector(".term").innerHTML = terminalAt(scene, Math.max(0, local));
-    if (scene.type === "shot") panShot(el, scene, local);
-    const t2 = el.querySelector(".tape");
-    if (t2) t2.style.clipPath = `inset(0 ${100 - 100 * ease(clamp01((local - (scene.tapeAt ?? 0.6)) / 0.7))}% 0 0)`;
+  window.TIMELINE.forEach((s, i) => {
+    const el = (built[i] ??= build(s));
+    const local = t - s.start;
+    const visible = local >= -FADE && local <= s.dur;
+    el.style.opacity = visible ? String(Math.min(clamp01(local / FADE + 1), clamp01((s.dur - local) / FADE))) : "0";
+    if (visible) ANIMATE[s.type](el, s, Math.max(0, local));
   });
 };
 
