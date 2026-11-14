@@ -24,11 +24,14 @@ interface EventLogEntry {
   event_payload: string;
 }
 
+export type CheckGroup = "Enclave hardware" | "Signed answers" | "Report file" | "On-chain payment";
+
 /** One verification result. `ok: null` means "not checkable in this environment". */
 export interface Check {
   name: string;
   ok: boolean | null;
   detail?: string;
+  group?: CheckGroup;
 }
 
 export interface AttestationResult {
@@ -114,10 +117,10 @@ function measurementChecks(att: ModelAttestation, quote: QuoteVerdict, nonce: st
   const tcb = typeof att.info.tcb_info === "string" ? JSON.parse(att.info.tcb_info) : att.info.tcb_info;
   const composeHash = sha256Hex(tcb.app_compose as string);
   return [
-    { name: "quote binds the signing key", ok: quote.reportData.slice(0, KEY_HEX_CHARS) === key.padEnd(KEY_HEX_CHARS, "0") },
-    { name: "quote binds the session nonce", ok: quote.reportData.slice(KEY_HEX_CHARS, 2 * KEY_HEX_CHARS) === nonce },
-    { name: "event log replays to the quote's RTMR3", ok: replay.digestsOk && quote.rtmr3 !== "" && replay.rtmr3 === quote.rtmr3 },
-    { name: "measured app config matches MRCONFIGID", ok: quote.mrConfig === MRCONFIG_PREFIX + composeHash + MRCONFIG_PADDING, detail: composeHash },
+    { name: "Quote binds the signing key", ok: quote.reportData.slice(0, KEY_HEX_CHARS) === key.padEnd(KEY_HEX_CHARS, "0") },
+    { name: "Quote binds the session nonce", ok: quote.reportData.slice(KEY_HEX_CHARS, 2 * KEY_HEX_CHARS) === nonce },
+    { name: "Event log replays to the quote's RTMR3", ok: replay.digestsOk && quote.rtmr3 !== "" && replay.rtmr3 === quote.rtmr3 },
+    { name: "Measured app config matches MRCONFIGID", ok: quote.mrConfig === MRCONFIG_PREFIX + composeHash + MRCONFIG_PADDING, detail: composeHash },
   ];
 }
 
@@ -138,8 +141,8 @@ export async function verifyEvidence(att: ModelAttestation, nonceHex: string, v:
   const nonce = nonceHex.toLowerCase();
   const { quote, check: quoteCheck } = await verifiedQuote(att, v);
   const checks: Check[] = [
-    { name: "signing algorithm is ed25519", ok: att.signing_algo === "ed25519" },
-    { name: "report echoes the session nonce", ok: att.request_nonce?.toLowerCase() === nonce },
+    { name: "Signing algorithm is ed25519", ok: att.signing_algo === "ed25519" },
+    { name: "Report echoes the session nonce", ok: att.request_nonce?.toLowerCase() === nonce },
     quoteCheck,
     ...measurementChecks(att, quote, nonce),
     await gpuCheck(att, nonce, v),

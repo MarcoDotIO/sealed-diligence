@@ -34,7 +34,9 @@ function option(args: string[], name: string): string | undefined {
 }
 
 function report(checks: Check[]): void {
+  let group: string | undefined;
   for (const c of checks) {
+    if (c.group && c.group !== group) console.log(`\n${(group = c.group)}`);
     const mark = c.ok === null ? "–" : c.ok ? "✓" : "✗";
     const detail = c.ok !== true && c.detail ? `\n      ${c.detail}` : "";
     console.log(`  ${mark} ${c.name}${detail}`);

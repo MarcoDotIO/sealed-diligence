@@ -1853,10 +1853,10 @@ function measurementChecks(att, quote, nonce) {
   const tcb = typeof att.info.tcb_info === "string" ? JSON.parse(att.info.tcb_info) : att.info.tcb_info;
   const composeHash = sha256Hex(tcb.app_compose);
   return [
-    { name: "quote binds the signing key", ok: quote.reportData.slice(0, KEY_HEX_CHARS) === key.padEnd(KEY_HEX_CHARS, "0") },
-    { name: "quote binds the session nonce", ok: quote.reportData.slice(KEY_HEX_CHARS, 2 * KEY_HEX_CHARS) === nonce },
-    { name: "event log replays to the quote's RTMR3", ok: replay.digestsOk && quote.rtmr3 !== "" && replay.rtmr3 === quote.rtmr3 },
-    { name: "measured app config matches MRCONFIGID", ok: quote.mrConfig === MRCONFIG_PREFIX + composeHash + MRCONFIG_PADDING, detail: composeHash }
+    { name: "Quote binds the signing key", ok: quote.reportData.slice(0, KEY_HEX_CHARS) === key.padEnd(KEY_HEX_CHARS, "0") },
+    { name: "Quote binds the session nonce", ok: quote.reportData.slice(KEY_HEX_CHARS, 2 * KEY_HEX_CHARS) === nonce },
+    { name: "Event log replays to the quote's RTMR3", ok: replay.digestsOk && quote.rtmr3 !== "" && replay.rtmr3 === quote.rtmr3 },
+    { name: "Measured app config matches MRCONFIGID", ok: quote.mrConfig === MRCONFIG_PREFIX + composeHash + MRCONFIG_PADDING, detail: composeHash }
   ];
 }
 async function gpuCheck(att, nonce, v) {
@@ -1875,8 +1875,8 @@ async function verifyEvidence(att, nonceHex, v) {
   const nonce = nonceHex.toLowerCase();
   const { quote, check: quoteCheck } = await verifiedQuote(att, v);
   const checks = [
-    { name: "signing algorithm is ed25519", ok: att.signing_algo === "ed25519" },
-    { name: "report echoes the session nonce", ok: att.request_nonce?.toLowerCase() === nonce },
+    { name: "Signing algorithm is ed25519", ok: att.signing_algo === "ed25519" },
+    { name: "Report echoes the session nonce", ok: att.request_nonce?.toLowerCase() === nonce },
     quoteCheck,
     ...measurementChecks(att, quote, nonce),
     await gpuCheck(att, nonce, v)
@@ -2080,6 +2080,73 @@ function renderDiligence(r) {
   ].join("\n");
 }
 
+// src/escrow.ts
+var RPC = {
+  testnet: ["https://rpc.testnet.fastnear.com", "https://rpc.testnet.near.org"],
+  mainnet: ["https://rpc.mainnet.fastnear.com", "https://rpc.mainnet.near.org"]
+};
+function escrowRef(requestId) {
+  const match = /^([a-z0-9._-]+\.(?:near|testnet))#(\d+)$/.exec(requestId);
+  if (!match) return null;
+  return { contract: match[1], id: Number(match[2]), network: match[1].endsWith(".testnet") ? "testnet" : "mainnet" };
+}
+async function callView(rpc, ref) {
+  const res = await fetch(rpc, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "sealed-diligence",
+      method: "query",
+      params: {
+        request_type: "call_function",
+        finality: "final",
+        account_id: ref.contract,
+        method_name: "get_request",
+        args_base64: btoa(JSON.stringify({ id: ref.id }))
+      }
+    })
+  });
+  const body = await res.json();
+  if (!body.result) throw new Error(`RPC error ${JSON.stringify(body.error).slice(0, 120)}`);
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(body.result.result)));
+}
+async function fetchEscrowRecord(ref) {
+  let lastError;
+  for (const rpc of RPC[ref.network]) {
+    try {
+      return await callView(rpc, ref);
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError;
+}
+function mismatches(record, r) {
+  const expected = [
+    ["commit", record.commit, r.commit],
+    ["question pack", record.pack_hash, r.pack_hash],
+    ["model", record.model, r.model],
+    ["enclave key", record.enclave_key, r.enclave_key.toLowerCase()],
+    ["seal", record.seal_text, r.seal.signature.text]
+  ];
+  return expected.filter(([, onChain, local]) => onChain !== local).map(([name]) => name);
+}
+async function escrowCheck(r) {
+  const ref = escrowRef(r.request_id);
+  if (!ref) return null;
+  const name = `Escrow ${ref.contract} request #${ref.id} was paid for this seal`;
+  try {
+    const record = await fetchEscrowRecord(ref);
+    if (!record) return { name, ok: false, detail: "no such request on-chain" };
+    if (record.status !== "Fulfilled") return { name, ok: false, detail: `request is ${record.status}` };
+    const differs = mismatches(record, r);
+    return { name, ok: differs.length === 0, detail: differs.length ? `on-chain ${differs.join(", ")} differ` : void 0 };
+  } catch (e) {
+    return { name, ok: null, detail: `couldn't reach NEAR RPC: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
 // src/verify-core.ts
 function renderedOrError(receipt) {
   try {
@@ -2096,15 +2163,20 @@ async function verifyReceipt(receipt, diligenceMd, verifiers) {
     salt: receipt.nonce.salt
   });
   const attestation = await verifyEvidence(receipt.attestation, receipt.nonce.value, verifiers);
+  const inGroup = (group) => (c) => ({ ...c, group });
   const checks = [
-    { name: "Attestation nonce derives from this commit, question pack and request", ok: expectedNonce === receipt.nonce.value },
-    ...attestation.checks.map((c) => ({ ...c, name: `Enclave: ${c.name}` })),
-    { name: "Attested key is the receipt's enclave key", ok: attestation.signingAddress === receipt.enclave_key.toLowerCase() },
-    ...await verifySignatures(receipt)
+    ...[
+      { name: "Attestation nonce derives from this commit, question pack and request", ok: expectedNonce === receipt.nonce.value },
+      ...attestation.checks,
+      { name: "Attested key is the receipt's enclave key", ok: attestation.signingAddress === receipt.enclave_key.toLowerCase() }
+    ].map(inGroup("Enclave hardware")),
+    ...(await verifySignatures(receipt)).map(inGroup("Signed answers"))
   ];
   if (diligenceMd !== null) {
-    checks.push({ name: "DILIGENCE.md matches the signed scorecard exactly", ok: renderedOrError(receipt) === diligenceMd });
+    checks.push(inGroup("Report file")({ name: "DILIGENCE.md matches the signed scorecard exactly", ok: renderedOrError(receipt) === diligenceMd }));
   }
+  const escrow = await escrowCheck(receipt);
+  if (escrow) checks.push(inGroup("On-chain payment")(escrow));
   return checks;
 }
 var allPassed = (checks) => checks.every((c) => c.ok !== false);
@@ -2112,11 +2184,13 @@ var allPassed = (checks) => checks.every((c) => c.ok !== false);
 // web/app.ts
 var PCCS = "https://pccs.phala.network/tdx/certification/v4";
 var SAMPLE = { receipt: "sample/receipt.json", diligence: "sample/DILIGENCE.md" };
-var TAMPER_BUMP = 50;
-var KEY_PREVIEW = 16;
-var SHORT_HASH = 12;
+var TAMPERED_OVERALL = 94;
+var SHORT = 8;
+var TAPE_REPEATS = 6;
+var GROUP_ORDER = ["Enclave hardware", "Signed answers", "Report file", "On-chain payment"];
 var $ = (sel) => document.querySelector(sel);
 var element = (tag, props = {}) => Object.assign(document.createElement(tag), props);
+var words2 = (s) => s.replace(/_/g, " ");
 var wasmReady = null;
 var browserVerifiers = {
   async verifyQuote(quote) {
@@ -2127,94 +2201,203 @@ var browserVerifiers = {
   },
   verifyGpu: async () => null
 };
+function setTape(state, receipt) {
+  const phrase = {
+    idle: "Sealed Diligence \u25C6 check before you trust",
+    checking: "Checking the seal",
+    sealed: receipt ? `Sealed \u25C6 ${receipt.request_id} \u25C6 commit ${receipt.commit.slice(0, SHORT)} \u25C6 enclave ${receipt.enclave_key.slice(0, SHORT)}` : "Sealed",
+    void: "Void \u25C6 seal broken \u25C6 do not rely on this report"
+  }[state];
+  const tape = $("#tape");
+  tape.dataset.state = state;
+  $("#tape-text").textContent = Array(TAPE_REPEATS).fill(phrase).join("  \u25C6  ");
+  if (state === "sealed" || state === "void") {
+    tape.classList.remove("fresh");
+    void tape.offsetWidth;
+    tape.classList.add("fresh");
+  }
+}
 function scoreRow(label, value) {
   const fill = element("i");
   fill.style.width = `${Math.max(0, Math.min(100, value))}%`;
-  const bar = element("div", { className: "bar" });
-  bar.append(fill);
+  const meter = element("div", { className: "meter" });
+  meter.append(fill);
   const row = element("div", { className: "score" });
-  row.append(element("span", { textContent: label }), bar, element("b", { textContent: String(value) }));
+  row.append(element("span", { textContent: label }), meter, element("b", { textContent: String(value) }));
   return row;
 }
-function checkItem(c) {
-  const li = element("li", { className: c.ok === null ? "skip" : c.ok ? "ok" : "fail", textContent: c.name });
-  if (c.detail && c.ok !== true) li.append(element("small", { textContent: c.detail }));
-  return li;
+function tableRow(cells, classes = []) {
+  const tr = element("tr");
+  cells.forEach((cell2, i) => {
+    const td = element("td", { className: classes[i] ?? "" });
+    td.append(cell2);
+    tr.append(td);
+  });
+  return tr;
 }
-function showScorecard(receipt, s) {
-  const input = sealInputOf(receipt);
-  $("#repo").textContent = `${receipt.repo_label} @ ${receipt.commit.slice(0, SHORT_HASH)}`;
+function showReport(receipt, s, input) {
   $("#verdict").textContent = VERDICT_LABEL[s.verdict] ?? s.verdict;
   $("#verdict").dataset.v = s.verdict;
   $("#overall").textContent = String(s.overall);
+  $("#subject").textContent = `${receipt.repo_label}, commit ${receipt.commit.slice(0, 12)}. ${s.injection_attempts} prompt-injection attempt(s), ${s.hardcoded_secrets} hardcoded secret(s).`;
   $("#scores").replaceChildren(
     scoreRow("Security", s.security),
     scoreRow("Code quality", s.code_quality),
     scoreRow("Test maturity", s.test_maturity),
     scoreRow("README matches code", s.readme_alignment)
   );
-  $("#counts").textContent = `${s.injection_attempts} injection attempt(s) \xB7 ${s.hardcoded_secrets} hardcoded secret(s) \xB7 ${input.reviewed_files} of ${input.tracked_files} files reviewed`;
   $("#summary").textContent = s.summary;
   $("#flags").replaceChildren(...(s.red_flags ?? []).map((f) => element("li", { textContent: f })));
 }
+function showClaims(input) {
+  const claims = (input.readme_check?.result ?? {}).claims ?? [];
+  $("#claims").replaceChildren(
+    ...claims.map((c) => tableRow([c.claim, words2(c.status)], ["", `status-${c.status.replace(/_/g, "-")}`]))
+  );
+}
+function showFiles(input) {
+  const readme = input.readme_check ? " The README is checked against them separately." : "";
+  $("#coverage").textContent = `${input.reviewed_files} of ${input.tracked_files} tracked files were reviewed one by one.${readme}`;
+  $("#files").replaceChildren(
+    ...input.files.map((f) => {
+      const review = f.review ?? {};
+      const findings = (review.findings ?? []).map((x) => `${x.severity} ${words2(x.kind)}`).join(", ") || "none";
+      const name = element("code", { textContent: f.path + (f.truncated ? " (first part)" : "") });
+      return tableRow([name, review.security_risk ?? "", findings], ["", `risk-${review.security_risk ?? ""}`, ""]);
+    })
+  );
+}
+function checkItem(c) {
+  const li = element("li", { className: c.ok === null ? "skip" : c.ok ? "ok" : "fail", textContent: c.name });
+  if (c.detail && c.ok !== true) li.append(element("small", { textContent: c.detail }));
+  return li;
+}
+function showChecks(checks) {
+  const groups = GROUP_ORDER.map((group) => ({ group, items: checks.filter((c) => c.group === group) })).filter((g) => g.items.length);
+  $("#groups").replaceChildren(
+    ...groups.flatMap(({ group, items }) => {
+      const passed = items.filter((c) => c.ok === true).length;
+      const heading = element("h3", { textContent: group });
+      heading.append(element("small", { textContent: `${passed} of ${items.length} passed` }));
+      const list = element("ul", { className: "checks" });
+      list.append(...items.map(checkItem));
+      return [heading, list];
+    })
+  );
+}
+function copyButton(value) {
+  const button = element("button", { className: "copy", type: "button", textContent: "Copy" });
+  button.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(value);
+    button.textContent = "Copied";
+    setTimeout(() => button.textContent = "Copy", 1500);
+  });
+  return button;
+}
+function showEvidence(receipt) {
+  const rows = [
+    ["Request", receipt.request_id],
+    ["Commit", receipt.commit],
+    ["Enclave key", receipt.enclave_key],
+    ["Question pack", receipt.pack_hash],
+    ["Model", receipt.model],
+    ["Generated", receipt.generated_at]
+  ];
+  $("#evidence").replaceChildren(
+    ...rows.flatMap(([label, value]) => {
+      const dd = element("dd");
+      dd.append(element("span", { className: "hash", textContent: value }), copyButton(value));
+      return [element("dt", { textContent: label }), dd];
+    })
+  );
+}
 function show(receipt, checks) {
   const passed = allPassed(checks);
+  const input = sealInputOf(receipt);
+  setTape(passed ? "sealed" : "void", receipt);
   $("#result").hidden = false;
   $("#result").classList.toggle("untrusted", !passed);
-  $("#banner").className = `banner ${passed ? "good" : "bad"}`;
-  $("#banner").textContent = passed ? "Verified: scored inside an attested enclave, unaltered" : "Not verified: something was altered or doesn't check out";
-  showScorecard(receipt, scorecardOf(receipt));
-  $("#checks").replaceChildren(...checks.map(checkItem));
-  $("#meta").textContent = `Request ${receipt.request_id} \xB7 model ${receipt.model} \xB7 enclave key ${receipt.enclave_key.slice(0, KEY_PREVIEW)}\u2026 \xB7 ${receipt.generated_at}`;
+  showReport(receipt, scorecardOf(receipt), input);
+  showClaims(input);
+  showFiles(input);
+  showChecks(checks);
+  showEvidence(receipt);
 }
-async function run(receiptText, diligenceMd) {
-  $("#status").textContent = "Verifying\u2026";
+function setStatus(text, isError = false) {
+  $("#status").textContent = text;
+  $("#status").classList.toggle("error", isError);
+}
+function summarize(label, checks) {
+  const failed = checks.filter((c) => c.ok === false).map((c) => c.name);
+  if (!failed.length) return `${label}: every check passed.`;
+  return `${label} failed verification, so don't rely on the scores shown. Failed: ${failed.join("; ")}.`;
+}
+async function run(receiptText, diligenceMd, label) {
+  setTape("checking");
+  setStatus(`Checking ${label}\u2026`);
   try {
     const receipt = JSON.parse(receiptText);
-    show(receipt, await verifyReceipt(receipt, diligenceMd, browserVerifiers));
-    $("#status").textContent = "";
+    const checks = await verifyReceipt(receipt, diligenceMd, browserVerifiers);
+    show(receipt, checks);
+    setStatus(summarize(label, checks), !allPassed(checks));
   } catch (e) {
-    $("#status").textContent = `Could not verify: ${e instanceof Error ? e.message : String(e)}`;
+    setTape("idle");
+    setStatus(`Couldn't check ${label}: ${e instanceof Error ? e.message : String(e)}. Make sure it's a receipt.json produced by sealed-diligence.`, true);
   }
 }
 async function runFiles(files) {
   const list = Array.from(files);
   const receipt = list.find((f) => f.name.endsWith(".json"));
   const diligence = list.find((f) => f.name.endsWith(".md"));
-  if (!receipt) {
-    $("#status").textContent = "Add the receipt.json (and optionally DILIGENCE.md).";
-    return;
+  if (!receipt) return setStatus("Add the receipt.json. DILIGENCE.md is optional.", true);
+  await run(await receipt.text(), diligence ? await diligence.text() : null, receipt.name);
+}
+async function fetchText(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} returned ${res.status}`);
+  return res.text();
+}
+async function runUrls(receiptUrl, diligenceUrl, label, editMd = (md) => md) {
+  try {
+    const [receipt, md] = await Promise.all([fetchText(receiptUrl), diligenceUrl ? fetchText(diligenceUrl) : Promise.resolve(null)]);
+    await run(receipt, md === null ? null : editMd(md), label);
+  } catch (e) {
+    setStatus(`Couldn't load ${label}: ${e instanceof Error ? e.message : String(e)}`, true);
   }
-  await run(await receipt.text(), diligence ? await diligence.text() : null);
 }
-async function runSample(editMd = (md) => md) {
-  const [receipt, md] = await Promise.all([fetch(SAMPLE.receipt), fetch(SAMPLE.diligence)].map((p) => p.then((r) => r.text())));
-  await run(receipt, editMd(md));
-}
-var raiseOverall = (md) => md.replace(/overall (\d+)\/100/, (_, n) => `overall ${Math.min(100, Number(n) + TAMPER_BUMP)}/100`);
-function onClick(sel, handler) {
-  $(sel).addEventListener("click", (e) => {
+var raiseOverall = (md) => md.replace(/overall \d+\/100/, `overall ${TAMPERED_OVERALL}/100`);
+function wireDragAndDrop() {
+  let depth = 0;
+  window.addEventListener("dragenter", (e) => {
     e.preventDefault();
-    void handler();
+    if (++depth === 1) document.body.classList.add("dragging");
+  });
+  window.addEventListener("dragleave", () => {
+    if (--depth === 0) document.body.classList.remove("dragging");
+  });
+  window.addEventListener("dragover", (e) => e.preventDefault());
+  window.addEventListener("drop", (e) => {
+    e.preventDefault();
+    depth = 0;
+    document.body.classList.remove("dragging");
+    if (e.dataTransfer?.files.length) void runFiles(e.dataTransfer.files);
   });
 }
-var drop = $("#drop");
-drop.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  drop.classList.add("over");
-});
-drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-drop.addEventListener("drop", (e) => {
-  e.preventDefault();
-  drop.classList.remove("over");
-  if (e.dataTransfer?.files) void runFiles(e.dataTransfer.files);
-});
-$("#file").addEventListener("change", (e) => {
-  const files = e.target.files;
-  if (files) void runFiles(files);
-});
-onClick("#sample", () => runSample());
-onClick("#tamper", () => runSample(raiseOverall));
+function start() {
+  wireDragAndDrop();
+  $("#file").addEventListener("change", (e) => {
+    const files = e.target.files;
+    if (files?.length) void runFiles(files);
+  });
+  $("#sample").addEventListener("click", () => void runUrls(SAMPLE.receipt, SAMPLE.diligence, "The sample report"));
+  $("#tamper").addEventListener("click", () => void runUrls(SAMPLE.receipt, SAMPLE.diligence, "The edited copy", raiseOverall));
+  const params = new URLSearchParams(location.search);
+  const shared = params.get("receipt");
+  setTape("idle");
+  if (shared) void runUrls(shared, params.get("md"), "The linked report");
+  else void runUrls(SAMPLE.receipt, SAMPLE.diligence, "The sample report");
+}
+start();
 /*! Bundled license information:
 
 @noble/ed25519/index.js:

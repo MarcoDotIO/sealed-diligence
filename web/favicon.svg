@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Sealed Diligence">
+  <path d="M16 6h24l10 10v42H16z" fill="#F6F7F8" stroke="#1E2128" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M40 6v10h10" fill="none" stroke="#1E2128" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M4 44 60 26v14L4 58z" fill="#2443C9"/>
+  <path d="M15 47.5v4M24 44.6v4M33 41.7v4M42 38.8v4M51 35.9v4" stroke="#F6F7F8" stroke-width="2.4" stroke-linecap="round"/>
+</svg>
