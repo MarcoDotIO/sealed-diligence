@@ -1,0 +1,11 @@
+$ sealed-diligence review ./acme-orders --request sealed-diligence.testnet#2
+commit 7edc2e3aca40: 5 tracked files, reviewing 4
+enclave attested (TDX + GPU), signing key 236f5a6b91dd47dc…
+  [1/4] src/db.ts
+  [2/4] package.json
+  [3/4] src/payments.ts
+  [4/4] src/server.ts
+  sealed
+
+do_not_proceed · overall 8/100 · injection attempts 1 · secrets 1
+wrote /Volumes/MARCUS-PROJECTS/active/sealed-diligence/demo/video/capture/DILIGENCE.md and /Volumes/MARCUS-PROJECTS/active/sealed-diligence/demo/video/capture/receipt.json

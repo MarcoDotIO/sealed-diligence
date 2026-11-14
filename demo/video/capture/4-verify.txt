@@ -1,0 +1,21 @@
+$ sealed-diligence verify receipt.json DILIGENCE.md
+Verifying Acme Orders @ 7edc2e3aca40 (request sealed-diligence.testnet#2)
+  ✓ Attestation nonce derives from this commit, question pack and request
+  ✓ Enclave: signing algorithm is ed25519
+  ✓ Enclave: report echoes the session nonce
+  ✓ Enclave: Intel TDX quote verifies
+  ✓ Enclave: quote binds the signing key
+  ✓ Enclave: quote binds the session nonce
+  ✓ Enclave: event log replays to the quote's RTMR3
+  ✓ Enclave: measured app config matches MRCONFIGID
+  ✓ Enclave: GPU attestation (NVIDIA NRAS)
+  ✓ Attested key is the receipt's enclave key
+  ✓ Seal request hash recomputed
+  ✓ Seal signed by the enclave key
+  ✓ Seal used the declared model
+  ✓ Seal is bound to this request, commit and question pack
+  ✓ 4 per-file reviews signed and listed in the seal
+  ✓ README check signed and listed in the seal
+  ✓ DILIGENCE.md matches the signed scorecard exactly
+
+VERIFIED

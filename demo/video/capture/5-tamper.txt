@@ -1,0 +1,6 @@
+$ sed -i 's/overall [0-9]*\/100/overall 94\/100/' DILIGENCE.md
+$ sealed-diligence verify receipt.json DILIGENCE.md
+  ✓ README check signed and listed in the seal
+  ✗ DILIGENCE.md matches the signed scorecard exactly
+
+NOT VERIFIED

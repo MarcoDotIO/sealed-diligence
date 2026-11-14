@@ -1,0 +1,4 @@
+$ near contract call-function as-transaction sealed-diligence.testnet create_request \
+    commit=7edc2e3a pack=c6bb11302a7a5451 enclave_key=236f5a6b91dd47dc fee=0.1 NEAR
+https://explorer.testnet.near.org/transactions/FJPe5CyKVAsfaSYUPgFV33de2JsmGrCXEvzG6Mw1fB97
+EVENT_JSON:{"event":"request_created","id":2,"request_id":"sealed-diligence.testnet#2"}
