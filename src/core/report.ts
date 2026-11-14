@@ -1,9 +1,17 @@
-// DILIGENCE.md is a pure function of the receipt. Verification re-renders it and compares byte for byte,
-// so editing a score in the Markdown (or in the receipt) is caught.
+/**
+ * Renders `DILIGENCE.md`, the human-readable report. Browser-safe.
+ *
+ * The report is a pure function of the receipt. Verification renders it again and compares byte for byte,
+ * so editing a score in the Markdown (or in the receipt) is caught. Any change to the output here makes
+ * every report already issued fail that comparison: treat the format as frozen and test it against
+ * `docs/sample/`.
+ * @module
+ */
+import { sha256Hex } from "./bytes.ts";
 import type { Scorecard, SealInput } from "./pack.ts";
-import { scorecardOf, sealInputOf, type Receipt } from "./receipt.ts";
-import { sha256Hex } from "./sig.ts";
+import { type Receipt, scorecardOf, sealInputOf } from "./receipt.ts";
 
+/** How each verdict reads to a person. */
 export const VERDICT_LABEL: Record<Scorecard["verdict"], string> = {
   proceed: "Proceed",
   proceed_with_caution: "Proceed with caution",
@@ -20,7 +28,11 @@ interface ReviewSummary {
   findings?: { kind: string; severity: string }[];
 }
 
-const cell = (s: unknown) => String(s ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+/** Make a value safe inside a Markdown table cell. */
+const cell = (s: unknown) =>
+  String(s ?? "")
+    .replace(/\|/g, "\\|")
+    .replace(/\n/g, " ");
 const words = (s: string) => s.replace(/_/g, " ");
 
 function scoreSection(s: Scorecard): string[] {
@@ -49,7 +61,14 @@ function redFlagSection(s: Scorecard): string[] {
 function readmeSection(input: SealInput): string[] {
   const claims = (input.readme_check?.result as ReadmeResult | undefined)?.claims;
   if (!claims?.length) return [];
-  return ["## README claims", "", "| Claim | Status |", "|---|---|", ...claims.map((c) => `| ${cell(c.claim)} | ${words(cell(c.status))} |`), ""];
+  return [
+    "## README claims",
+    "",
+    "| Claim | Status |",
+    "|---|---|",
+    ...claims.map((c) => `| ${cell(c.claim)} | ${words(cell(c.status))} |`),
+    "",
+  ];
 }
 
 function fileRow(f: SealInput["files"][number]): string {
@@ -94,6 +113,7 @@ function verificationSection(r: Receipt): string[] {
   ];
 }
 
+/** Render the report for `r`. Deterministic: the same receipt always gives the same bytes. */
 export function renderDiligence(r: Receipt): string {
   const scorecard = scorecardOf(r);
   const input = sealInputOf(r);

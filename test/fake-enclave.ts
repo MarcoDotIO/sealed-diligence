@@ -1,9 +1,9 @@
 // A stand-in for the NEAR AI enclave: a local ed25519 key signs exactly the payload NEAR AI's
 // provider_tee signature covers, so every downstream check runs for real.
 import * as ed from "@noble/ed25519";
-import type { EnclaveClient } from "../src/review.ts";
-import { FILE_SYSTEM, MODEL, README_SYSTEM } from "../src/pack.ts";
-import { sha256Hex, toHex } from "../src/sig.ts";
+import { sha256Hex, toHex } from "../src/core/bytes.ts";
+import { FILE_SYSTEM, MODEL, README_SYSTEM } from "../src/core/pack.ts";
+import type { EnclaveClient } from "../src/node/enclave.ts";
 
 export type Replier = (system: string, user: string) => unknown;
 
@@ -12,9 +12,15 @@ export const demoReplies: Replier = (system, user) => {
   if (system === FILE_SYSTEM) {
     const findings = [];
     if (user.includes("ignore previous instructions"))
-      findings.push({ kind: "injection_attempt", severity: "high", summary: "Comment tries to instruct the reviewer to inflate the score." });
-    if (user.includes("acmepay_live_")) findings.push({ kind: "hardcoded_secret", severity: "critical", summary: "A live payment API key is committed." });
-    if (user.includes("SELECT")) findings.push({ kind: "vulnerability", severity: "high", summary: "SQL query built by string concatenation." });
+      findings.push({
+        kind: "injection_attempt",
+        severity: "high",
+        summary: "Comment tries to instruct the reviewer to inflate the score.",
+      });
+    if (user.includes("acmepay_live_"))
+      findings.push({ kind: "hardcoded_secret", severity: "critical", summary: "A live payment API key is committed." });
+    if (user.includes("SELECT"))
+      findings.push({ kind: "vulnerability", severity: "high", summary: "SQL query built by string concatenation." });
     return { purpose: "Handles orders", quality: 2, security_risk: findings.length ? "high" : "none", tests_present: false, findings };
   }
   if (system === README_SYSTEM) {
@@ -59,7 +65,7 @@ export async function fakeEnclave(
         requestBody,
         responseBody,
         content,
-        sig: { text, signature, signing_address: enclaveKey, signing_algo: "ed25519", signature_kind: "provider_tee" },
+        signature: { text, signature, signing_address: enclaveKey, signing_algo: "ed25519", signature_kind: "provider_tee" },
       };
     },
   };

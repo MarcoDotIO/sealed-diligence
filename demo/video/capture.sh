@@ -26,7 +26,7 @@ mkdir -p "$CAP/repo" && (cd /tmp/acme-orders && git ls-files | while read -r f; 
 
 ID=$(near contract call-function as-read-only "$ESCROW" next_id json-args '{}' network-config testnet now 2>/dev/null | tail -1 | tr -dc 0-9)
 COMMIT=$(git -C /tmp/acme-orders rev-parse HEAD)
-PACK=$(npx tsx -e 'import("./src/pack.ts").then(m => console.log(m.PACK_HASH))')
+PACK=$(npx tsx -e 'import("./src/core/pack.ts").then(m => console.log(m.PACK_HASH))')
 KEY=$(npx tsx scripts/check-attestation.ts | awk '/^PASS/ && !k {print $2; k=1}')
 printf '{"founder":"%s","commit":"%s","pack_hash":"%s","model":"%s","enclave_key":"%s","timeout_hours":168}' \
   "$FOUNDER" "$COMMIT" "$PACK" "$MODEL" "$KEY" > "$CAP/create-args.json"

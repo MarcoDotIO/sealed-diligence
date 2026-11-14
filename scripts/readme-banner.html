@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>README banner</title>
+<!-- Rendered to docs/assets/readme-banner.png by scripts/readme-images.ts. -->
+<style>
+  @font-face { font-family: "Archivo"; src: url("../web/assets/archivo.woff2") format("woff2"); font-weight: 100 900; font-stretch: 62% 125%; }
+  :root { --paper: #e8ebee; --ink: #1e2128; --muted: #5b6270; --cobalt: #2443c9; --on-tape: #f6f7f8; }
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1600px; height: 520px; overflow: hidden; position: relative; background: var(--paper); font-family: "Archivo", sans-serif; color: var(--ink); }
+  .brand { position: absolute; left: 80px; top: 64px; display: flex; align-items: center; gap: 16px; font-size: 32px; font-stretch: 125%; font-weight: 760; }
+  h1 { position: absolute; left: 80px; top: 140px; font-size: 92px; font-stretch: 125%; font-weight: 790; letter-spacing: -0.025em; line-height: 0.98; }
+  .tape { position: absolute; left: -60px; right: -60px; top: 384px; height: 84px; transform: rotate(-2.2deg); background: var(--cobalt); color: var(--on-tape); display: flex; align-items: center; white-space: nowrap; overflow: hidden; box-shadow: 0 14px 28px -16px rgba(0,0,0,.5); }
+  .tape::before, .tape::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: repeating-linear-gradient(90deg, var(--on-tape) 0 14px, transparent 14px 26px); opacity: .55; }
+  .tape::before { top: 8px; } .tape::after { bottom: 8px; }
+  .tape span { font-size: 26px; font-stretch: 125%; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding-left: 80px; }
+</style>
+</head>
+<body>
+  <div class="brand"><img src="../web/assets/mark.svg" width="46" height="46" alt="" />Sealed Diligence</div>
+  <h1>Read the code review.<br />Never see the code.</h1>
+  <div class="tape"><span id="tape"></span></div>
+<script>
+  document.getElementById("tape").textContent = Array(3).fill("Sealed ◆ sealed-diligence.testnet#2 ◆ commit 7edc2e3a ◆ enclave 236f5a6b").join("  ◆  ");
+</script>
+</body>
+</html>

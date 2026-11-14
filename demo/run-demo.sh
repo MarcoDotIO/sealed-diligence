@@ -19,7 +19,7 @@ grep -n "LIVE\|_live_" /tmp/acme-orders/src/payments.ts | head -1
 step "The investor opens an escrowed diligence request on NEAR, pinning commit, questions and enclave key"
 ID=$(near contract call-function as-read-only "$ESCROW" next_id json-args '{}' network-config testnet now 2>/dev/null | tail -1 | tr -dc 0-9)
 COMMIT=$(git -C /tmp/acme-orders rev-parse HEAD)
-PACK=$(npx tsx -e 'import("./src/pack.ts").then(m => console.log(m.PACK_HASH))')
+PACK=$(npx tsx -e 'import("./src/core/pack.ts").then(m => console.log(m.PACK_HASH))')
 KEY=$(npx tsx scripts/check-attestation.ts | awk '/^PASS/ && !k {print $2; k=1}')
 printf '{"founder":"%s","commit":"%s","pack_hash":"%s","model":"deepseek-ai/DeepSeek-V4.1-Flash-1017","enclave_key":"%s","timeout_hours":72}' \
   "$FOUNDER" "$COMMIT" "$PACK" "$KEY" > "$OUT/create-args.json"

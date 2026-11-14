@@ -1,6 +1,6 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { escrowRef } from "../src/escrow.ts";
+import { test } from "node:test";
+import { escrowRef } from "../src/core/escrow.ts";
 
 test("escrow request ids name a contract, an id and a network", () => {
   assert.deepEqual(escrowRef("sealed-diligence.testnet#2"), { contract: "sealed-diligence.testnet", id: 2, network: "testnet" });

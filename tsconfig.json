@@ -8,18 +8,9 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "lib": [
-      "ES2022",
-      "DOM"
-    ],
+    "lib": ["ES2022", "DOM"],
     "allowImportingTsExtensions": true,
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
-  "include": [
-    "src",
-    "test",
-    "web/*.ts"
-  ]
+  "include": ["src", "test", "web/*.ts"]
 }

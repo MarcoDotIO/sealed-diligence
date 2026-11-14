@@ -1,21 +1,36 @@
-// Browser verifier: the same checks as `sealed-diligence verify`, run locally in the page.
-// Nothing is uploaded. Intel collateral comes from Phala's public PCCS mirror and the escrow record
-// from public NEAR RPC, both of which allow browser requests.
+/**
+ * The browser verifier: the same checks as `sealed-diligence verify`, run locally in the page.
+ *
+ * Nothing is uploaded. Intel collateral comes from Phala's public PCCS mirror and the escrow record from
+ * public NEAR RPC, both of which allow browser requests. NVIDIA's attestation service doesn't, so the GPU
+ * check is reported as "needs the CLI" rather than passed.
+ *
+ * Bundled into `docs/app.js` by `scripts/build-web.sh`; the page is `web/index.html`.
+ * @module
+ */
 import init, { js_get_collateral, js_verify } from "@phala/dcap-qvl-web";
-import { quoteVerdictFromDcap, type Check, type CheckGroup, type EvidenceVerifiers } from "../src/evidence.ts";
-import type { Scorecard, SealInput } from "../src/pack.ts";
-import { scorecardOf, sealInputOf, type Receipt } from "../src/receipt.ts";
-import { VERDICT_LABEL } from "../src/render.ts";
-import { allPassed, verifyReceipt } from "../src/verify-core.ts";
-import { escrowRef, fetchEscrowRecord } from "../src/escrow.ts";
+import { type EvidenceVerifiers, quoteVerdictFromDcap } from "../src/core/attestation.ts";
+import { allPassed, CHECK_GROUPS, type Check, errorMessage } from "../src/core/checks.ts";
+import { escrowRef, fetchEscrowRecord } from "../src/core/escrow.ts";
+import type { Scorecard, SealInput } from "../src/core/pack.ts";
+import { type Receipt, scorecardOf, sealInputOf } from "../src/core/receipt.ts";
+import { VERDICT_LABEL } from "../src/core/report.ts";
+import { verifyReceipt } from "../src/core/verify.ts";
 
+/** A CORS-enabled mirror of Intel's TDX collateral service. */
 const PCCS = "https://pccs.phala.network/tdx/certification/v4";
 const SAMPLE = { receipt: "sample/receipt.json", diligence: "sample/DILIGENCE.md" };
+/** The score the "edit the report" demo writes in place of the real one. */
 const TAMPERED_OVERALL = 94;
+/** Hex characters of the request's commit and key printed on the tape. */
 const SHORT = 8;
+const SHORT_COMMIT = 12;
+/** Enough copies of the tape text to run past the widest screen. */
 const TAPE_REPEATS = 6;
-const GROUP_ORDER: CheckGroup[] = ["Enclave hardware", "Signed answers", "Report file", "On-chain payment"];
+const COPIED_FEEDBACK_MS = 1500;
+const NEAR_DECIMALS = 24;
 
+/** The security tape: grey while idle or checking, cobalt when the seal holds, red VOID when it doesn't. */
 type TapeState = "idle" | "checking" | "sealed" | "void";
 
 interface ReadmeClaim {
@@ -27,6 +42,7 @@ interface FileReviewSummary {
   findings?: { kind: string; severity: string }[];
 }
 
+/** The element matching `sel` (the page's markup guarantees it exists). */
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> = {}) =>
   Object.assign(document.createElement(tag), props);
@@ -34,6 +50,7 @@ const words = (s: string) => s.replace(/_/g, " ");
 
 let wasmReady: Promise<unknown> | null = null;
 
+/** The browser's attestation strategy: dcap-qvl compiled to WebAssembly; no GPU verdict (CORS). */
 const browserVerifiers: EvidenceVerifiers = {
   async verifyQuote(quote) {
     wasmReady ??= init({ module_or_path: new URL("./dcap-qvl-web_bg.wasm", import.meta.url) });
@@ -44,11 +61,14 @@ const browserVerifiers: EvidenceVerifiers = {
   verifyGpu: async () => null,
 };
 
+/** Set the tape's state and text; a final state replays the "tape applied" animation. */
 function setTape(state: TapeState, receipt?: Receipt): void {
   const phrase = {
     idle: "Sealed Diligence ◆ check before you trust",
     checking: "Checking the seal",
-    sealed: receipt ? `Sealed ◆ ${receipt.request_id} ◆ commit ${receipt.commit.slice(0, SHORT)} ◆ enclave ${receipt.enclave_key.slice(0, SHORT)}` : "Sealed",
+    sealed: receipt
+      ? `Sealed ◆ ${receipt.request_id} ◆ commit ${receipt.commit.slice(0, SHORT)} ◆ enclave ${receipt.enclave_key.slice(0, SHORT)}`
+      : "Sealed",
     void: "Void ◆ seal broken ◆ do not rely on this report",
   }[state];
   const tape = $("#tape");
@@ -81,11 +101,13 @@ function tableRow(cells: (string | HTMLElement)[], classes: string[] = []): HTML
   return tr;
 }
 
-function showReport(receipt: Receipt, s: Scorecard, input: SealInput): void {
+/** The report column: verdict, scores, summary and red flags, exactly as signed. */
+function showReport(receipt: Receipt, s: Scorecard): void {
   $("#verdict").textContent = VERDICT_LABEL[s.verdict] ?? s.verdict;
   $("#verdict").dataset.v = s.verdict;
   $("#overall").textContent = String(s.overall);
-  $("#subject").textContent = `${receipt.repo_label}, commit ${receipt.commit.slice(0, 12)}. ${s.injection_attempts} prompt-injection attempt(s), ${s.hardcoded_secrets} hardcoded secret(s).`;
+  $("#subject").textContent =
+    `${receipt.repo_label}, commit ${receipt.commit.slice(0, SHORT_COMMIT)}. ${s.injection_attempts} prompt-injection attempt(s), ${s.hardcoded_secrets} hardcoded secret(s).`;
   $("#scores").replaceChildren(
     scoreRow("Security", s.security),
     scoreRow("Code quality", s.code_quality),
@@ -122,17 +144,19 @@ function findingCounts(findings: { kind: string; severity: string }[]): string {
     byKind.set(f.kind, entry);
   }
   const parts = [...byKind].sort((a, b) => SEVERITY_RANK.indexOf(b[1].worst) - SEVERITY_RANK.indexOf(a[1].worst));
-  return parts.map(([kind, { count, worst }]) => {
-    const [one, many] = KIND_PLURAL[kind] ?? [words(kind), words(kind)];
-    return `${count} ${count === 1 ? one : many} (${worst})`;
-  }).join(", ") || "none";
+  return (
+    parts
+      .map(([kind, { count, worst }]) => {
+        const [one, many] = KIND_PLURAL[kind] ?? [words(kind), words(kind)];
+        return `${count} ${count === 1 ? one : many} (${worst})`;
+      })
+      .join(", ") || "none"
+  );
 }
 
 function showClaims(input: SealInput): void {
   const claims = ((input.readme_check?.result ?? {}) as { claims?: ReadmeClaim[] }).claims ?? [];
-  $("#claims").replaceChildren(
-    ...claims.map((c) => tableRow([c.claim, words(c.status)], ["", `status-${c.status.replace(/_/g, "-")}`])),
-  );
+  $("#claims").replaceChildren(...claims.map((c) => tableRow([c.claim, words(c.status)], ["", `status-${c.status.replace(/_/g, "-")}`])));
 }
 
 function showFiles(input: SealInput): void {
@@ -154,8 +178,9 @@ function checkItem(c: Check): HTMLElement {
   return li;
 }
 
+/** The proof column: every check under its group heading, with a tally per group. */
 function showChecks(checks: Check[]): void {
-  const groups = GROUP_ORDER.map((group) => ({ group, items: checks.filter((c) => c.group === group) })).filter((g) => g.items.length);
+  const groups = CHECK_GROUPS.map((group) => ({ group, items: checks.filter((c) => c.group === group) })).filter((g) => g.items.length);
   $("#groups").replaceChildren(
     ...groups.flatMap(({ group, items }) => {
       const heading = element("h3", { textContent: group });
@@ -167,6 +192,7 @@ function showChecks(checks: Check[]): void {
   );
 }
 
+/** "9 passed, 1 needs the CLI". */
 function groupTally(items: Check[]): string {
   const count = (ok: boolean | null) => items.filter((c) => c.ok === ok).length;
   const parts = [`${count(true)} passed`];
@@ -175,10 +201,11 @@ function groupTally(items: Check[]): string {
   return parts.join(", ");
 }
 
-const YOCTO_PER_NEAR = 10n ** 24n;
+const YOCTO_PER_NEAR = 10n ** BigInt(NEAR_DECIMALS);
+/** Yoctonear as a NEAR amount without trailing zeros ("0.1"). */
 const formatNear = (yocto: string) => {
   const whole = BigInt(yocto) / YOCTO_PER_NEAR;
-  const frac = (BigInt(yocto) % YOCTO_PER_NEAR).toString().padStart(24, "0").replace(/0+$/, "");
+  const frac = (BigInt(yocto) % YOCTO_PER_NEAR).toString().padStart(NEAR_DECIMALS, "0").replace(/0+$/, "");
   return frac ? `${whole}.${frac}` : `${whole}`;
 };
 
@@ -191,8 +218,15 @@ async function showEscrow(receipt: Receipt): Promise<void> {
   try {
     const record = await fetchEscrowRecord(ref);
     if (!record) return;
-    const link = element("a", { href: `https://explorer.${ref.network}.near.org/accounts/${ref.contract}`, textContent: `${ref.contract} request #${ref.id}` });
-    target.append(`Escrow `, link, `: ${formatNear(record.fee)} NEAR from ${record.investor} to ${record.founder}, ${record.status.toLowerCase()}.`);
+    const link = element("a", {
+      href: `https://explorer.${ref.network}.near.org/accounts/${ref.contract}`,
+      textContent: `${ref.contract} request #${ref.id}`,
+    });
+    target.append(
+      `Escrow `,
+      link,
+      `: ${formatNear(record.fee)} NEAR from ${record.investor} to ${record.founder}, ${record.status.toLowerCase()}.`,
+    );
   } catch {
     target.textContent = `Escrow ${ref.contract} request #${ref.id}: couldn't reach NEAR RPC.`;
   }
@@ -203,11 +237,14 @@ function copyButton(value: string): HTMLButtonElement {
   button.addEventListener("click", async () => {
     await navigator.clipboard.writeText(value);
     button.textContent = "Copied";
-    setTimeout(() => (button.textContent = "Copy"), 1500);
+    setTimeout(() => {
+      button.textContent = "Copy";
+    }, COPIED_FEEDBACK_MS);
   });
   return button;
 }
 
+/** The values an investor may want to paste elsewhere (an explorer, the escrow call), with copy buttons. */
 function showEvidence(receipt: Receipt): void {
   const rows: [string, string][] = [
     ["Request", receipt.request_id],
@@ -226,13 +263,14 @@ function showEvidence(receipt: Receipt): void {
   );
 }
 
+/** Render a verified (or failed) receipt. The report is shown either way; a failure turns the tape VOID. */
 function show(receipt: Receipt, checks: Check[]): void {
   const passed = allPassed(checks);
   const input = sealInputOf(receipt);
   setTape(passed ? "sealed" : "void", receipt);
   $("#result").hidden = false;
   $("#result").classList.toggle("untrusted", !passed);
-  showReport(receipt, scorecardOf(receipt), input);
+  showReport(receipt, scorecardOf(receipt));
   showClaims(input);
   showFiles(input);
   showChecks(checks);
@@ -251,6 +289,7 @@ function summarize(label: string, checks: Check[]): string {
   return `${label} failed verification, so don't rely on the scores shown. Failed: ${failed.join("; ")}.`;
 }
 
+/** Verify a receipt (and optionally its report) and show the result. `label` names it in status messages. */
 async function run(receiptText: string, diligenceMd: string | null, label: string): Promise<void> {
   setTape("checking");
   setStatus(`Checking ${label}…`);
@@ -261,7 +300,7 @@ async function run(receiptText: string, diligenceMd: string | null, label: strin
     setStatus(summarize(label, checks), !allPassed(checks));
   } catch (e) {
     setTape("idle");
-    setStatus(`Couldn't check ${label}: ${e instanceof Error ? e.message : String(e)}. Make sure it's a receipt.json produced by sealed-diligence.`, true);
+    setStatus(`Couldn't check ${label}: ${errorMessage(e)}. Make sure it's a receipt.json produced by sealed-diligence.`, true);
   }
 }
 
@@ -279,17 +318,24 @@ async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
-async function runUrls(receiptUrl: string, diligenceUrl: string | null, label: string, editMd: (md: string) => string = (md) => md): Promise<void> {
+/** Fetch and verify a receipt by URL; `editMd` lets the tamper demo change the report first. */
+async function runUrls(
+  receiptUrl: string,
+  diligenceUrl: string | null,
+  label: string,
+  editMd: (md: string) => string = (md) => md,
+): Promise<void> {
   try {
     const [receipt, md] = await Promise.all([fetchText(receiptUrl), diligenceUrl ? fetchText(diligenceUrl) : Promise.resolve(null)]);
     await run(receipt, md === null ? null : editMd(md), label);
   } catch (e) {
-    setStatus(`Couldn't load ${label}: ${e instanceof Error ? e.message : String(e)}`, true);
+    setStatus(`Couldn't load ${label}: ${errorMessage(e)}`, true);
   }
 }
 
 const raiseOverall = (md: string) => md.replace(/overall \d+\/100/, `overall ${TAMPERED_OVERALL}/100`);
 
+/** Accept a receipt (and report) dropped anywhere on the page. */
 function wireDragAndDrop(): void {
   let depth = 0;
   window.addEventListener("dragenter", (e) => {

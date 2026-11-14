@@ -9,6 +9,9 @@
   },
   "scripts": {
     "diligence": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "lint": "biome check . && cd contract && cargo fmt --check && cargo clippy --all-targets --quiet -- -D warnings",
+    "format": "biome check --write . && cd contract && cargo fmt",
     "build": "tsc --noEmit -p . && ./scripts/build-web.sh && cd contract && cargo near build non-reproducible-wasm",
     "test": "tsc --noEmit -p . && tsx --test test/*.test.ts && cd contract && cargo test --quiet",
     "test:ts": "tsx --test test/*.test.ts"
@@ -24,6 +27,7 @@
     "@phala/dcap-qvl-web": "^0.3.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.7",
     "@types/node": "^26.6.6",
     "esbuild": "^0.28.2",
     "playwright-core": "^1.65.1",
