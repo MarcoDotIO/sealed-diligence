@@ -2247,7 +2247,33 @@ function showReport(receipt, s, input) {
     scoreRow("README matches code", s.readme_alignment)
   );
   $("#summary").textContent = s.summary;
-  $("#flags").replaceChildren(...(s.red_flags ?? []).map((f) => element("li", { textContent: f })));
+  $("#flags").replaceChildren(...injectionFirst(s.red_flags ?? []).map((f) => element("li", { textContent: f })));
+}
+var INJECTION_FLAG = /\breviewers?\b|prompt[- ]injection|manipulat/i;
+function injectionFirst(flags) {
+  return [...flags.filter((f) => INJECTION_FLAG.test(f)), ...flags.filter((f) => !INJECTION_FLAG.test(f))];
+}
+var SEVERITY_RANK = ["low", "medium", "high", "critical"];
+var KIND_PLURAL = {
+  vulnerability: ["vulnerability", "vulnerabilities"],
+  hardcoded_secret: ["hardcoded secret", "hardcoded secrets"],
+  injection_attempt: ["injection attempt", "injection attempts"],
+  bug: ["bug", "bugs"],
+  quality: ["quality issue", "quality issues"]
+};
+function findingCounts(findings) {
+  const byKind = /* @__PURE__ */ new Map();
+  for (const f of findings) {
+    const entry = byKind.get(f.kind) ?? { count: 0, worst: "low" };
+    entry.count++;
+    if (SEVERITY_RANK.indexOf(f.severity) > SEVERITY_RANK.indexOf(entry.worst)) entry.worst = f.severity;
+    byKind.set(f.kind, entry);
+  }
+  const parts = [...byKind].sort((a, b) => SEVERITY_RANK.indexOf(b[1].worst) - SEVERITY_RANK.indexOf(a[1].worst));
+  return parts.map(([kind, { count, worst }]) => {
+    const [one, many] = KIND_PLURAL[kind] ?? [words2(kind), words2(kind)];
+    return `${count} ${count === 1 ? one : many} (${worst})`;
+  }).join(", ") || "none";
 }
 function showClaims(input) {
   const claims = (input.readme_check?.result ?? {}).claims ?? [];
@@ -2261,7 +2287,7 @@ function showFiles(input) {
   $("#files").replaceChildren(
     ...input.files.map((f) => {
       const review = f.review ?? {};
-      const findings = (review.findings ?? []).map((x) => `${x.severity} ${words2(x.kind)}`).join(", ") || "none";
+      const findings = findingCounts(review.findings ?? []);
       const name = element("code", { textContent: f.path + (f.truncated ? " (first part)" : "") });
       return tableRow([name, review.security_risk ?? "", findings], ["", `risk-${review.security_risk ?? ""}`, ""]);
     })
@@ -2276,14 +2302,40 @@ function showChecks(checks) {
   const groups = GROUP_ORDER.map((group) => ({ group, items: checks.filter((c) => c.group === group) })).filter((g) => g.items.length);
   $("#groups").replaceChildren(
     ...groups.flatMap(({ group, items }) => {
-      const passed = items.filter((c) => c.ok === true).length;
       const heading = element("h3", { textContent: group });
-      heading.append(element("small", { textContent: `${passed} of ${items.length} passed` }));
+      heading.append(element("small", { textContent: groupTally(items) }));
       const list = element("ul", { className: "checks" });
       list.append(...items.map(checkItem));
       return [heading, list];
     })
   );
+}
+function groupTally(items) {
+  const count = (ok) => items.filter((c) => c.ok === ok).length;
+  const parts = [`${count(true)} passed`];
+  if (count(null)) parts.push(`${count(null)} needs the CLI`);
+  if (count(false)) parts.push(`${count(false)} failed`);
+  return parts.join(", ");
+}
+var YOCTO_PER_NEAR = 10n ** 24n;
+var formatNear = (yocto) => {
+  const whole = BigInt(yocto) / YOCTO_PER_NEAR;
+  const frac = (BigInt(yocto) % YOCTO_PER_NEAR).toString().padStart(24, "0").replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : `${whole}`;
+};
+async function showEscrow(receipt) {
+  const target = $("#escrow");
+  target.replaceChildren();
+  const ref = escrowRef(receipt.request_id);
+  if (!ref) return;
+  try {
+    const record = await fetchEscrowRecord(ref);
+    if (!record) return;
+    const link = element("a", { href: `https://explorer.${ref.network}.near.org/accounts/${ref.contract}`, textContent: `${ref.contract} request #${ref.id}` });
+    target.append(`Escrow `, link, `: ${formatNear(record.fee)} NEAR from ${record.investor} to ${record.founder}, ${record.status.toLowerCase()}.`);
+  } catch {
+    target.textContent = `Escrow ${ref.contract} request #${ref.id}: couldn't reach NEAR RPC.`;
+  }
 }
 function copyButton(value) {
   const button = element("button", { className: "copy", type: "button", textContent: "Copy" });
@@ -2322,6 +2374,7 @@ function show(receipt, checks) {
   showFiles(input);
   showChecks(checks);
   showEvidence(receipt);
+  void showEscrow(receipt);
 }
 function setStatus(text, isError = false) {
   $("#status").textContent = text;
@@ -2329,7 +2382,7 @@ function setStatus(text, isError = false) {
 }
 function summarize(label, checks) {
   const failed = checks.filter((c) => c.ok === false).map((c) => c.name);
-  if (!failed.length) return `${label}: every check passed.`;
+  if (!failed.length) return "Seal intact. Below is exactly what the enclave signed.";
   return `${label} failed verification, so don't rely on the scores shown. Failed: ${failed.join("; ")}.`;
 }
 async function run(receiptText, diligenceMd, label) {
@@ -2393,6 +2446,7 @@ function start() {
   $("#tamper").addEventListener("click", () => void runUrls(SAMPLE.receipt, SAMPLE.diligence, "The edited copy", raiseOverall));
   const params = new URLSearchParams(location.search);
   const shared = params.get("receipt");
+  if (params.get("view") === "report") document.body.classList.add("report-view");
   setTape("idle");
   if (shared) void runUrls(shared, params.get("md"), "The linked report");
   else void runUrls(SAMPLE.receipt, SAMPLE.diligence, "The sample report");

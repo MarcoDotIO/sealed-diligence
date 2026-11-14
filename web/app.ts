@@ -7,6 +7,7 @@ import type { Scorecard, SealInput } from "../src/pack.ts";
 import { scorecardOf, sealInputOf, type Receipt } from "../src/receipt.ts";
 import { VERDICT_LABEL } from "../src/render.ts";
 import { allPassed, verifyReceipt } from "../src/verify-core.ts";
+import { escrowRef, fetchEscrowRecord } from "../src/escrow.ts";
 
 const PCCS = "https://pccs.phala.network/tdx/certification/v4";
 const SAMPLE = { receipt: "sample/receipt.json", diligence: "sample/DILIGENCE.md" };
@@ -92,7 +93,39 @@ function showReport(receipt: Receipt, s: Scorecard, input: SealInput): void {
     scoreRow("README matches code", s.readme_alignment),
   );
   $("#summary").textContent = s.summary;
-  $("#flags").replaceChildren(...(s.red_flags ?? []).map((f) => element("li", { textContent: f })));
+  $("#flags").replaceChildren(...injectionFirst(s.red_flags ?? []).map((f) => element("li", { textContent: f })));
+}
+
+const INJECTION_FLAG = /\breviewers?\b|prompt[- ]injection|manipulat/i;
+
+/** The reviewer-manipulation flag is the integrity finding, so it leads. Order only; text is as signed. */
+function injectionFirst(flags: string[]): string[] {
+  return [...flags.filter((f) => INJECTION_FLAG.test(f)), ...flags.filter((f) => !INJECTION_FLAG.test(f))];
+}
+
+const SEVERITY_RANK = ["low", "medium", "high", "critical"];
+const KIND_PLURAL: Record<string, [string, string]> = {
+  vulnerability: ["vulnerability", "vulnerabilities"],
+  hardcoded_secret: ["hardcoded secret", "hardcoded secrets"],
+  injection_attempt: ["injection attempt", "injection attempts"],
+  bug: ["bug", "bugs"],
+  quality: ["quality issue", "quality issues"],
+};
+
+/** "1 hardcoded secret (critical), 2 bugs (medium)" instead of repeating each finding. */
+function findingCounts(findings: { kind: string; severity: string }[]): string {
+  const byKind = new Map<string, { count: number; worst: string }>();
+  for (const f of findings) {
+    const entry = byKind.get(f.kind) ?? { count: 0, worst: "low" };
+    entry.count++;
+    if (SEVERITY_RANK.indexOf(f.severity) > SEVERITY_RANK.indexOf(entry.worst)) entry.worst = f.severity;
+    byKind.set(f.kind, entry);
+  }
+  const parts = [...byKind].sort((a, b) => SEVERITY_RANK.indexOf(b[1].worst) - SEVERITY_RANK.indexOf(a[1].worst));
+  return parts.map(([kind, { count, worst }]) => {
+    const [one, many] = KIND_PLURAL[kind] ?? [words(kind), words(kind)];
+    return `${count} ${count === 1 ? one : many} (${worst})`;
+  }).join(", ") || "none";
 }
 
 function showClaims(input: SealInput): void {
@@ -108,7 +141,7 @@ function showFiles(input: SealInput): void {
   $("#files").replaceChildren(
     ...input.files.map((f) => {
       const review = (f.review ?? {}) as FileReviewSummary;
-      const findings = (review.findings ?? []).map((x) => `${x.severity} ${words(x.kind)}`).join(", ") || "none";
+      const findings = findingCounts(review.findings ?? []);
       const name = element("code", { textContent: f.path + (f.truncated ? " (first part)" : "") });
       return tableRow([name, review.security_risk ?? "", findings], ["", `risk-${review.security_risk ?? ""}`, ""]);
     }),
@@ -125,14 +158,44 @@ function showChecks(checks: Check[]): void {
   const groups = GROUP_ORDER.map((group) => ({ group, items: checks.filter((c) => c.group === group) })).filter((g) => g.items.length);
   $("#groups").replaceChildren(
     ...groups.flatMap(({ group, items }) => {
-      const passed = items.filter((c) => c.ok === true).length;
       const heading = element("h3", { textContent: group });
-      heading.append(element("small", { textContent: `${passed} of ${items.length} passed` }));
+      heading.append(element("small", { textContent: groupTally(items) }));
       const list = element("ul", { className: "checks" });
       list.append(...items.map(checkItem));
       return [heading, list];
     }),
   );
+}
+
+function groupTally(items: Check[]): string {
+  const count = (ok: boolean | null) => items.filter((c) => c.ok === ok).length;
+  const parts = [`${count(true)} passed`];
+  if (count(null)) parts.push(`${count(null)} needs the CLI`);
+  if (count(false)) parts.push(`${count(false)} failed`);
+  return parts.join(", ");
+}
+
+const YOCTO_PER_NEAR = 10n ** 24n;
+const formatNear = (yocto: string) => {
+  const whole = BigInt(yocto) / YOCTO_PER_NEAR;
+  const frac = (BigInt(yocto) % YOCTO_PER_NEAR).toString().padStart(24, "0").replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : `${whole}`;
+};
+
+/** Report header line for receipts tied to an escrow request: who paid, how much, and its state. */
+async function showEscrow(receipt: Receipt): Promise<void> {
+  const target = $("#escrow");
+  target.replaceChildren();
+  const ref = escrowRef(receipt.request_id);
+  if (!ref) return;
+  try {
+    const record = await fetchEscrowRecord(ref);
+    if (!record) return;
+    const link = element("a", { href: `https://explorer.${ref.network}.near.org/accounts/${ref.contract}`, textContent: `${ref.contract} request #${ref.id}` });
+    target.append(`Escrow `, link, `: ${formatNear(record.fee)} NEAR from ${record.investor} to ${record.founder}, ${record.status.toLowerCase()}.`);
+  } catch {
+    target.textContent = `Escrow ${ref.contract} request #${ref.id}: couldn't reach NEAR RPC.`;
+  }
 }
 
 function copyButton(value: string): HTMLButtonElement {
@@ -174,6 +237,7 @@ function show(receipt: Receipt, checks: Check[]): void {
   showFiles(input);
   showChecks(checks);
   showEvidence(receipt);
+  void showEscrow(receipt);
 }
 
 function setStatus(text: string, isError = false): void {
@@ -183,7 +247,7 @@ function setStatus(text: string, isError = false): void {
 
 function summarize(label: string, checks: Check[]): string {
   const failed = checks.filter((c) => c.ok === false).map((c) => c.name);
-  if (!failed.length) return `${label}: every check passed.`;
+  if (!failed.length) return "Seal intact. Below is exactly what the enclave signed.";
   return `${label} failed verification, so don't rely on the scores shown. Failed: ${failed.join("; ")}.`;
 }
 
@@ -256,6 +320,7 @@ function start(): void {
   // Shareable links: ?receipt=<url>&md=<url>. With no link, the sample is checked on arrival.
   const params = new URLSearchParams(location.search);
   const shared = params.get("receipt");
+  if (params.get("view") === "report") document.body.classList.add("report-view");
   setTape("idle");
   if (shared) void runUrls(shared, params.get("md"), "The linked report");
   else void runUrls(SAMPLE.receipt, SAMPLE.diligence, "The sample report");

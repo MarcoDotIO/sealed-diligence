@@ -16,6 +16,7 @@ rm -rf "$CAP" && mkdir -p "$CAP"
 chain_lines() { grep -E "EVENT_JSON|transactions/" | sed -E 's/^[│ ]+//'; }
 
 ./scripts/make-demo-repo.sh /tmp/acme-orders > /dev/null
+mkdir -p "$CAP/repo" && (cd /tmp/acme-orders && git ls-files | while read -r f; do mkdir -p "$CAP/repo/$(dirname "$f")"; cp "$f" "$CAP/repo/$f"; done)
 {
   echo "$ sed -n '5,6p' src/server.ts"
   sed -n '5,6p' /tmp/acme-orders/src/server.ts
