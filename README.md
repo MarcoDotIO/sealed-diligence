@@ -100,7 +100,7 @@ founder's machine                         NEAR AI Cloud enclave (TDX + H100/H200
 ## NEAR pieces
 
 - **NEAR AI Cloud** private inference, model attestation (Intel TDX quote via `dcap-qvl`, RTMR3 event-log replay, MRCONFIGID, NVIDIA NRAS), and ed25519 `provider_tee` response signatures. Model: `deepseek-ai/DeepSeek-V4.1-Flash-1017` (NEAR-operated).
-- **Escrow contract** (`contract/`, near-sdk 5): `create_request` pins founder, commit, pack hash, model and enclave key with an attached fee; `fulfil` checks the seal with `env::ed25519_verify` and that the signed request body names this request, commit and pack, then pays the founder; `refund` after the deadline. Testnet deployment and example calls: see [Escrow on testnet](#escrow-on-testnet).
+- **Escrow contract** (`contract/`, near-sdk 5): `create_request` pins founder, commit, pack hash, model and enclave key with an attached fee; `fulfil` checks the seal with `env::ed25519_verify` and that the signed request body names this request, commit and pack, then pays the founder; `refund` after the deadline. Deployed on testnet at [`sealed-diligence.testnet`](https://explorer.testnet.near.org/accounts/sealed-diligence.testnet); see [Escrow on testnet](#escrow-on-testnet).
 
 ## Escrow on testnet
 
