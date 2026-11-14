@@ -56,14 +56,16 @@ sed -i '' -E 's/overall ([0-9]+)\/100/overall 94\/100/' "$CAP/DILIGENCE.tampered
 
 npx tsx src/cli.ts fulfil-args "$CAP/receipt.json" --out "$CAP/fulfil-args.json" > /dev/null
 {
-  echo "$ near contract call-function as-transaction $ESCROW fulfil (seal + enclave signature)"
+  echo "$ near contract call-function as-transaction $ESCROW fulfil \\"
+  echo "    file-args fulfil-args.json   # seal request + enclave signature"
   near contract call-function as-transaction "$ESCROW" fulfil file-args "$CAP/fulfil-args.json" \
     prepaid-gas '100 Tgas' attached-deposit '0 NEAR' sign-as "$FOUNDER" network-config testnet \
     sign-with-plaintext-private-key "$FOUNDER_KEY" send 2>&1 | chain_lines
 } > "$CAP/6-fulfil.txt"
 
 {
-  echo "$ near contract call-function as-read-only $ESCROW get_request '{\"id\":$ID}'"
+  echo "$ near contract call-function as-read-only $ESCROW \\"
+  echo "    get_request '{\"id\":$ID}'"
   near contract call-function as-read-only "$ESCROW" get_request json-args "{\"id\":$ID}" network-config testnet now 2>/dev/null \
     | grep -E '"(status|founder|investor|commit|fee|request_id)"'
 } >> "$CAP/6-fulfil.txt"

@@ -1,7 +1,9 @@
-$ near contract call-function as-transaction sealed-diligence.testnet fulfil (seal + enclave signature)
+$ near contract call-function as-transaction sealed-diligence.testnet fulfil \
+    file-args fulfil-args.json   # seal request + enclave signature
 https://explorer.testnet.near.org/transactions/6LxgtUHApRvTrKh9AzuGGpiMousMttdkfBJRH18XNCCi
 EVENT_JSON:{"event":"request_fulfilled","id":2}
-$ near contract call-function as-read-only sealed-diligence.testnet get_request '{"id":2}'
+$ near contract call-function as-read-only sealed-diligence.testnet \
+    get_request '{"id":2}'
   "commit": "7edc2e3aca407a050d3d1217565e6781756f3771",
   "fee": "100000000000000000000000",
   "founder": "marcodotio-testnet.testnet",

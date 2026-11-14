@@ -3,6 +3,7 @@
 //   npx tsx demo/video/make-video.ts
 // Voice: ElevenLabs when ELEVEN_LABS_API_KEY is set (ELEVENLABS_VOICE_ID optional), otherwise macOS `say`.
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { extname, join, resolve } from "node:path";
@@ -63,7 +64,15 @@ function audioSeconds(file: string): number {
   return Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).toString().trim());
 }
 
-async function speak(text: string, file: string): Promise<string> {
+/** Clips are cached by voice + text, so rebuilding doesn't re-spend TTS credits on unchanged lines. */
+async function speak(text: string, outDir: string): Promise<string> {
+  const voice = elevenKey() ? `eleven-${process.env.ELEVENLABS_VOICE_ID ?? ELEVEN_DEFAULT_VOICE}` : `say-${SAY_VOICE}`;
+  const base = join(outDir, `vo-${createHash("sha1").update(`${voice}|${text}`).digest("hex").slice(0, 16)}`);
+  for (const ext of [".mp3", ".aiff"]) if (existsSync(base + ext)) return base + ext;
+  return synthesize(text, `${base}.wav`);
+}
+
+async function synthesize(text: string, file: string): Promise<string> {
   const key = elevenKey();
   if (!key) {
     const aiff = file.replace(/\.\w+$/, ".aiff");
@@ -119,6 +128,7 @@ function scenes(): Scene[] {
     {
       type: "terminal", step: "6 · Paid on-chain", windowTitle: "founder", lines: readCapture("6-fulfil.txt"),
       caption: "The contract checks the enclave's ed25519 signature itself, then pays · request is Fulfilled",
+      minDur: 10.5,
       voice: "On chain, the contract checks the enclave's signature itself, and only then pays for the report.",
     },
   ];
@@ -185,8 +195,8 @@ async function main(): Promise<void> {
   const timeline = scenes();
   const clips: (string | null)[] = [];
   let clock = 0;
-  for (const [i, scene] of timeline.entries()) {
-    const clip = scene.voice ? await speak(scene.voice, join(OUT, `vo-${i}.wav`)) : null;
+  for (const scene of timeline) {
+    const clip = scene.voice ? await speak(scene.voice, OUT) : null;
     clips.push(clip);
     scene.start = clock;
     scene.dur = Math.max(scene.minDur ?? 0, clip ? audioSeconds(clip) + VOICE_PAD : 0);
