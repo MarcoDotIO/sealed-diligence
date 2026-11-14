@@ -1,71 +1,50 @@
-// Full verification (Node): enclave attestation + every signature + DILIGENCE.md integrity.
+// Node-side verification: the shared checks with Node's quote/GPU verifiers, plus the closing audit.
 import { readFileSync } from "node:fs";
-import { sessionNonce, verifyModelAttestation, type ModelAttestation } from "./attest.ts";
-import { sealInputOf, verifySignatures, type Receipt, type VerifyLine } from "./receipt.ts";
-import { renderDiligence } from "./render.ts";
+import { nodeVerifiers } from "./attest.ts";
+import type { Check } from "./evidence.ts";
 import { fileRequest, readmeRequest, reviewOf } from "./pack.ts";
+import { replyContent, sealInputOf, type FileEntry, type Receipt } from "./receipt.ts";
 import { findReadme, readAt, trackedFiles } from "./repo.ts";
 import { sha256Hex } from "./sig.ts";
+import { verifyReceipt } from "./verify-core.ts";
 
-export async function verifyReceipt(r: Receipt, diligenceMd?: string, opts: { skipGpu?: boolean } = {}): Promise<VerifyLine[]> {
-  const lines: VerifyLine[] = [];
-  const nonce = sessionNonce({ commit: r.commit, packHash: r.pack_hash, requestId: r.request_id, salt: r.nonce.salt });
-  lines.push({ name: "attestation nonce derives from this commit, question pack and request", ok: nonce === r.nonce.value });
-  const att = await verifyModelAttestation(r.attestation as unknown as ModelAttestation, r.nonce.value, opts);
-  lines.push({
-    name: "enclave attestation (TDX quote, key + nonce binding, RTMR3, config, GPU)",
-    ok: att.ok,
-    detail: att.checks.filter((c) => !c.ok).map((c) => c.name).join(", ") || undefined,
-  });
-  lines.push({ name: "attested key is the receipt's enclave key", ok: att.signingAddress === r.enclave_key.toLowerCase() });
-  lines.push(...(await verifySignatures(r)));
-  if (diligenceMd !== undefined) {
-    let rendered = "";
-    try {
-      rendered = renderDiligence(r);
-    } catch (e) {
-      rendered = `render failed: ${(e as Error).message}`;
-    }
-    lines.push({ name: "DILIGENCE.md matches the signed scorecard exactly", ok: rendered === diligenceMd });
-  }
-  return lines;
+export function verifyReceiptLocally(receipt: Receipt, diligenceMd: string | null, opts: { skipGpu?: boolean } = {}): Promise<Check[]> {
+  return verifyReceipt(receipt, diligenceMd, nodeVerifiers(opts));
+}
+
+function fileMatchesSource(entry: FileEntry, repo: string, commit: string): boolean {
+  const file = readAt(repo, commit, entry.path);
+  if (!file) return false;
+  const rebuilt = fileRequest(entry.path, file.content, file.truncated);
+  return file.sha256 === entry.file_sha256 && sha256Hex(rebuilt) === entry.request_hash;
+}
+
+function readmeMatchesSource(r: Receipt, repo: string, paths: string[]): boolean {
+  const readmePath = findReadme(paths);
+  const readme = readmePath ? readAt(repo, r.commit, readmePath) : null;
+  if (!readme || !r.readme_check) return false;
+  const purposes = r.files.map((f) => ({ path: f.path, purpose: String(reviewOf(replyContent(f.response_body)).purpose ?? "") }));
+  return sha256Hex(readmeRequest(readme.content, purposes)) === r.readme_check.request_hash;
 }
 
 /**
- * Closing audit: with the source in hand, rebuild every per-file request byte for byte and compare
- * to the hashes the enclave signed. Proves which files were reviewed and that prompts were not altered.
+ * Closing audit: with the source in hand, rebuild every signed request byte for byte.
+ * Proves which files were reviewed and that the prompts were not altered.
  */
-export function auditAgainstSource(r: Receipt, repo: string): VerifyLine[] {
-  const lines: VerifyLine[] = [];
-  const mismatched: string[] = [];
-  for (const f of r.files) {
-    const file = readAt(repo, r.commit, f.path);
-    if (!file) {
-      mismatched.push(`${f.path} (missing)`);
-      continue;
-    }
-    const ok = file.sha256 === f.file_sha256 && sha256Hex(fileRequest(f.path, file.content, file.truncated)) === f.request_hash;
-    if (!ok) mismatched.push(f.path);
-  }
-  lines.push({
-    name: `${r.files.length} per-file requests rebuilt from source match the signed hashes`,
-    ok: mismatched.length === 0,
-    detail: mismatched.join(", ") || undefined,
-  });
+export function auditAgainstSource(r: Receipt, repo: string): Check[] {
+  const mismatched = r.files.filter((f) => !fileMatchesSource(f, repo, r.commit)).map((f) => f.path);
   const paths = trackedFiles(repo, r.commit);
   const declared = sealInputOf(r).tracked_files;
-  lines.push({ name: "declared tracked-file count matches the commit", ok: declared === paths.length, detail: `${declared} vs ${paths.length}` });
-  if (r.readme_check) {
-    const readmePath = findReadme(paths);
-    const readme = readmePath ? readAt(repo, r.commit, readmePath) : null;
-    const reviews = r.files.map((f) => reviewOf(JSON.parse(f.response_body).choices?.[0]?.message?.content ?? ""));
-    const purposes = r.files.map((f, i) => ({ path: f.path, purpose: String(reviews[i].purpose ?? "") }));
-    const ok = !!readme && sha256Hex(readmeRequest(readme.content, purposes)) === r.readme_check.request_hash;
-    lines.push({ name: "README check request rebuilt from source matches", ok });
-  }
-  return lines;
+  const checks: Check[] = [
+    {
+      name: `${r.files.length} per-file requests rebuilt from source match the signed hashes`,
+      ok: mismatched.length === 0,
+      detail: mismatched.join(", ") || undefined,
+    },
+    { name: "Declared tracked-file count matches the commit", ok: declared === paths.length, detail: `${declared} vs ${paths.length}` },
+  ];
+  if (r.readme_check) checks.push({ name: "README check request rebuilt from source matches", ok: readmeMatchesSource(r, repo, paths) });
+  return checks;
 }
 
-export function loadReceipt(path: string): Receipt {
-  return JSON.parse(readFileSync(path, "utf8")) as Receipt;
-}
+export const loadReceipt = (path: string): Receipt => JSON.parse(readFileSync(path, "utf8")) as Receipt;

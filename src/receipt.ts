@@ -1,7 +1,7 @@
-// The receipt an investor receives. Contains no source code: per-file requests appear only as hashes.
-// Everything here is browser-safe so the web verifier runs the same checks as the CLI.
+// The receipt an investor receives. It contains no source code: per-file requests appear only as hashes.
+import type { Check } from "./evidence.ts";
+import { PROTOCOL, parseJsonReply, type Scorecard, type SealInput } from "./pack.ts";
 import { checkSignedCall, sha256Hex, type SignatureRecord } from "./sig.ts";
-import { parseJsonReply, type Scorecard, type SealInput } from "./pack.ts";
 
 export interface SignedEntry {
   chat_id: string;
@@ -10,8 +10,14 @@ export interface SignedEntry {
   signature: SignatureRecord;
 }
 
+export interface FileEntry extends SignedEntry {
+  path: string;
+  file_sha256: string;
+  truncated: boolean;
+}
+
 export interface Receipt {
-  protocol: "sealed-diligence/v1";
+  protocol: typeof PROTOCOL;
   model: string;
   request_id: string;
   repo_label: string;
@@ -21,81 +27,80 @@ export interface Receipt {
   nonce: { salt: string; value: string };
   enclave_key: string;
   attestation: Record<string, unknown>;
-  files: (SignedEntry & { path: string; file_sha256: string; truncated: boolean })[];
+  files: FileEntry[];
   readme_check: SignedEntry | null;
   seal: SignedEntry & { request_body: string };
   generated_at: string;
-  founder_seal?: unknown;
 }
 
-export interface VerifyLine {
-  name: string;
-  ok: boolean;
-  detail?: string;
-}
+export const replyContent = (responseBody: string): string => JSON.parse(responseBody).choices?.[0]?.message?.content ?? "";
 
-const content = (responseBody: string) => JSON.parse(responseBody).choices?.[0]?.message?.content ?? "";
-
-export function scorecardOf(r: Receipt): Scorecard {
-  return parseJsonReply<Scorecard>(content(r.seal.response_body));
-}
+export const scorecardOf = (r: Receipt): Scorecard => parseJsonReply<Scorecard>(replyContent(r.seal.response_body));
 
 export function sealInputOf(r: Receipt): SealInput {
   const user = JSON.parse(r.seal.request_body).messages[1].content as string;
   return JSON.parse(user.slice(user.indexOf("{")));
 }
 
-/** All checks that need only the receipt (no network, no source). */
-export async function verifySignatures(r: Receipt): Promise<VerifyLine[]> {
-  const lines: VerifyLine[] = [];
-  const add = (name: string, ok: boolean, detail?: string) => lines.push({ name, ok, detail });
-  const sig = (e: SignedEntry) =>
-    checkSignedCall({ model: r.model, requestHash: e.request_hash, responseBody: e.response_body, sig: e.signature, enclaveKey: r.enclave_key });
+function signatureProblems(r: Receipt, e: SignedEntry): Promise<string[]> {
+  return checkSignedCall({
+    model: r.model,
+    requestHash: e.request_hash,
+    responseBody: e.response_body,
+    sig: e.signature,
+    enclaveKey: r.enclave_key,
+  }).then((c) => c.problems);
+}
 
-  // Seal: the request body is held in full, so its hash is recomputed here.
-  const sealReqHash = sha256Hex(r.seal.request_body);
-  add("seal request hash recomputed", sealReqHash === r.seal.request_hash);
-  const sealSig = await sig(r.seal);
-  add("seal signed by the attested enclave", sealSig.ok, sealSig.problems.join("; ") || undefined);
-  add("seal used the declared model", JSON.parse(r.seal.request_body).model === r.model);
+async function sealChecks(r: Receipt): Promise<Check[]> {
+  const problems = await signatureProblems(r, r.seal);
+  return [
+    { name: "Seal request hash recomputed", ok: sha256Hex(r.seal.request_body) === r.seal.request_hash },
+    { name: "Seal signed by the enclave key", ok: problems.length === 0, detail: problems.join("; ") || undefined },
+    { name: "Seal used the declared model", ok: JSON.parse(r.seal.request_body).model === r.model },
+  ];
+}
 
-  // The seal input names this request, commit and question pack.
-  let input: SealInput | null = null;
+async function fileReviewCheck(r: Receipt, input: SealInput): Promise<Check> {
+  const listedByPath = new Map(input.files.map((f) => [f.path, f]));
+  const problems: string[] = [];
+  for (const f of r.files) {
+    const listed = listedByPath.get(f.path);
+    const consistent =
+      listed?.request_hash === f.request_hash &&
+      listed.response_hash === sha256Hex(f.response_body) &&
+      listed.file_sha256 === f.file_sha256;
+    const issues = [...(await signatureProblems(r, f)), ...(consistent ? [] : ["not consistent with the seal"])];
+    if (issues.length) problems.push(`${f.path}: ${issues.join(", ")}`);
+  }
+  return {
+    name: `${r.files.length} per-file reviews signed and listed in the seal`,
+    ok: problems.length === 0 && listedByPath.size === r.files.length,
+    detail: problems.join(" | ") || undefined,
+  };
+}
+
+async function readmeCheck(r: Receipt, readme: SignedEntry, input: SealInput): Promise<Check> {
+  const problems = await signatureProblems(r, readme);
+  const listed =
+    input.readme_check?.request_hash === readme.request_hash && input.readme_check.response_hash === sha256Hex(readme.response_body);
+  return { name: "README check signed and listed in the seal", ok: problems.length === 0 && listed, detail: problems.join("; ") || undefined };
+}
+
+/** Checks that need only the receipt: no network, no source. */
+export async function verifySignatures(r: Receipt): Promise<Check[]> {
+  const checks = await sealChecks(r);
+  let input: SealInput;
   try {
     input = sealInputOf(r);
   } catch (e) {
-    add("seal input readable", false, (e as Error).message);
+    return [...checks, { name: "Seal input readable", ok: false, detail: (e as Error).message }];
   }
-  if (input) {
-    add(
-      "seal is bound to this request, commit and question pack",
-      input.request_id === r.request_id && input.commit === r.commit && input.pack_hash === r.pack_hash,
-    );
-    // Every per-file review is signed and listed in the seal with matching hashes.
-    const byPath = new Map(input.files.map((f) => [f.path, f]));
-    let bad = 0;
-    const problems: string[] = [];
-    for (const f of r.files) {
-      const s = await sig(f);
-      const listed = byPath.get(f.path);
-      const consistent =
-        !!listed &&
-        listed.request_hash === f.request_hash &&
-        listed.response_hash === sha256Hex(f.response_body) &&
-        listed.file_sha256 === f.file_sha256;
-      if (!s.ok || !consistent) {
-        bad++;
-        problems.push(`${f.path}: ${[...s.problems, consistent ? "" : "not consistent with seal"].filter(Boolean).join(", ")}`);
-      }
-    }
-    add(`${r.files.length} per-file reviews signed and listed in the seal`, bad === 0 && byPath.size === r.files.length, problems.join(" | ") || undefined);
-    if (r.readme_check) {
-      const s = await sig(r.readme_check);
-      const listed =
-        input.readme_check?.request_hash === r.readme_check.request_hash &&
-        input.readme_check?.response_hash === sha256Hex(r.readme_check.response_body);
-      add("README check signed and listed in the seal", s.ok && listed, s.problems.join("; ") || undefined);
-    }
-  }
-  return lines;
+  checks.push({
+    name: "Seal is bound to this request, commit and question pack",
+    ok: input.request_id === r.request_id && input.commit === r.commit && input.pack_hash === r.pack_hash,
+  });
+  checks.push(await fileReviewCheck(r, input));
+  if (r.readme_check) checks.push(await readmeCheck(r, r.readme_check, input));
+  return checks;
 }

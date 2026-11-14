@@ -1,17 +1,18 @@
 #!/usr/bin/env -S npx tsx
-// sealed-diligence: review | verify | audit
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
-import { runReview } from "./review.ts";
+import type { Check } from "./evidence.ts";
+import { scorecardOf } from "./receipt.ts";
 import { renderDiligence } from "./render.ts";
-import { auditAgainstSource, loadReceipt, verifyReceipt } from "./verify.ts";
-import { scorecardOf, type VerifyLine } from "./receipt.ts";
-import { signatureBytes } from "./sig.ts";
+import { DEFAULT_MAX_FILES, nearAiEnclave, runReview } from "./review.ts";
+import { signatureBytes, toHex } from "./sig.ts";
+import { allPassed } from "./verify-core.ts";
+import { auditAgainstSource, loadReceipt, verifyReceiptLocally } from "./verify.ts";
 
 const USAGE = `sealed-diligence <command>
 
-  review <repo> [--ref HEAD] [--request <id>] [--label <name>] [--out <dir>] [--max-files 60]
+  review <repo> [--ref HEAD] [--request <id>] [--label <name>] [--out <dir>] [--max-files ${DEFAULT_MAX_FILES}]
       Founder: review the repo at one commit inside a NEAR AI enclave.
       Writes DILIGENCE.md and receipt.json (no source code in either). Needs NEAR_AI_API_KEY.
 
@@ -25,65 +26,86 @@ const USAGE = `sealed-diligence <command>
       Arguments for the escrow contract's fulfil call (review with --request <contract>#<id>).
 `;
 
-function flag(args: string[], name: string, def?: string) {
+const SHORT_HASH = 12;
+
+function option(args: string[], name: string): string | undefined {
   const i = args.indexOf(name);
-  return i >= 0 ? args[i + 1] : def;
+  return i >= 0 ? args[i + 1] : undefined;
 }
 
-function print(lines: VerifyLine[]): boolean {
-  for (const l of lines) console.log(`${l.ok ? "  ✓" : "  ✗"} ${l.name}${!l.ok && l.detail ? `\n      ${l.detail}` : ""}`);
-  const ok = lines.every((l) => l.ok);
-  console.log(ok ? "\nVERIFIED" : "\nNOT VERIFIED");
-  return ok;
-}
-
-async function main() {
-  const [cmd, ...args] = process.argv.slice(2);
-  if (cmd === "review") {
-    const repo = resolve(args[0] ?? ".");
-    const apiKey = process.env.NEAR_AI_API_KEY;
-    if (!apiKey) throw new Error("set NEAR_AI_API_KEY");
-    const out = resolve(flag(args, "--out", ".")!);
-    const receipt = await runReview({
-      repo,
-      ref: flag(args, "--ref", "HEAD"),
-      requestId: flag(args, "--request", randomUUID())!,
-      repoLabel: flag(args, "--label", basename(repo))!,
-      maxFiles: Number(flag(args, "--max-files", "60")),
-      apiKey,
-      log: (m) => console.log(m),
-    });
-    writeFileSync(`${out}/receipt.json`, JSON.stringify(receipt, null, 2) + "\n");
-    writeFileSync(`${out}/DILIGENCE.md`, renderDiligence(receipt));
-    const s = scorecardOf(receipt);
-    console.log(`\n${s.verdict} · overall ${s.overall}/100 · injection attempts ${s.injection_attempts} · secrets ${s.hardcoded_secrets}`);
-    console.log(`wrote ${out}/DILIGENCE.md and ${out}/receipt.json`);
-  } else if (cmd === "verify") {
-    const receipt = loadReceipt(args[0]);
-    const mdPath = args[1] && !args[1].startsWith("--") ? args[1] : undefined;
-    const md = mdPath ? readFileSync(mdPath, "utf8") : undefined;
-    console.log(`Verifying ${receipt.repo_label} @ ${receipt.commit.slice(0, 12)} (request ${receipt.request_id})`);
-    process.exitCode = print(await verifyReceipt(receipt, md, { skipGpu: args.includes("--skip-gpu") })) ? 0 : 1;
-  } else if (cmd === "fulfil-args") {
-    // Arguments for the escrow contract's `fulfil` call, built from the receipt.
-    const receipt = loadReceipt(args[0]);
-    const id = Number(receipt.request_id.split("#").pop());
-    if (!Number.isInteger(id)) throw new Error(`request id ${receipt.request_id} is not an escrow request (<contract>#<n>)`);
-    const sig = receipt.seal.signature;
-    const out = { id, seal_request_body: receipt.seal.request_body, seal_text: sig.text, signature_hex: Buffer.from(signatureBytes(sig.signature)).toString("hex") };
-    writeFileSync(flag(args, "--out", "fulfil-args.json")!, JSON.stringify(out));
-    console.log(`wrote ${flag(args, "--out", "fulfil-args.json")} for request ${receipt.request_id}`);
-  } else if (cmd === "audit") {
-    const receipt = loadReceipt(args[0]);
-    console.log(`Closing audit of ${receipt.repo_label} @ ${receipt.commit.slice(0, 12)} against ${args[1]}`);
-    process.exitCode = print(auditAgainstSource(receipt, resolve(args[1]))) ? 0 : 1;
-  } else {
-    console.log(USAGE);
-    process.exitCode = cmd ? 1 : 0;
+function report(checks: Check[]): void {
+  for (const c of checks) {
+    const mark = c.ok === null ? "–" : c.ok ? "✓" : "✗";
+    const detail = c.ok !== true && c.detail ? `\n      ${c.detail}` : "";
+    console.log(`  ${mark} ${c.name}${detail}`);
   }
+  const passed = allPassed(checks);
+  console.log(passed ? "\nVERIFIED" : "\nNOT VERIFIED");
+  process.exitCode = passed ? 0 : 1;
 }
 
-main().catch((e) => {
-  console.error(`error: ${(e as Error).message}`);
-  process.exitCode = 1;
-});
+async function review(args: string[]): Promise<void> {
+  const apiKey = process.env.NEAR_AI_API_KEY;
+  if (!apiKey) throw new Error("set NEAR_AI_API_KEY");
+  const repo = resolve(args[0] ?? ".");
+  const outDir = resolve(option(args, "--out") ?? ".");
+  const log = (m: string) => console.log(m);
+  const receipt = await runReview({
+    repo,
+    ref: option(args, "--ref") ?? "HEAD",
+    requestId: option(args, "--request") ?? randomUUID(),
+    repoLabel: option(args, "--label") ?? basename(repo),
+    maxFiles: Number(option(args, "--max-files") ?? DEFAULT_MAX_FILES),
+    enclave: nearAiEnclave(apiKey, log),
+    log,
+  });
+  writeFileSync(`${outDir}/receipt.json`, JSON.stringify(receipt, null, 2) + "\n");
+  writeFileSync(`${outDir}/DILIGENCE.md`, renderDiligence(receipt));
+  const s = scorecardOf(receipt);
+  console.log(`\n${s.verdict} · overall ${s.overall}/100 · injection attempts ${s.injection_attempts} · secrets ${s.hardcoded_secrets}`);
+  console.log(`wrote ${outDir}/DILIGENCE.md and ${outDir}/receipt.json`);
+}
+
+async function verify(args: string[]): Promise<void> {
+  const receipt = loadReceipt(args[0]);
+  const mdPath = args[1]?.startsWith("--") ? undefined : args[1];
+  console.log(`Verifying ${receipt.repo_label} @ ${receipt.commit.slice(0, SHORT_HASH)} (request ${receipt.request_id})`);
+  const md = mdPath ? readFileSync(mdPath, "utf8") : null;
+  report(await verifyReceiptLocally(receipt, md, { skipGpu: args.includes("--skip-gpu") }));
+}
+
+async function audit(args: string[]): Promise<void> {
+  const receipt = loadReceipt(args[0]);
+  console.log(`Closing audit of ${receipt.repo_label} @ ${receipt.commit.slice(0, SHORT_HASH)} against ${args[1]}`);
+  report(auditAgainstSource(receipt, resolve(args[1])));
+}
+
+async function fulfilArgs(args: string[]): Promise<void> {
+  const receipt = loadReceipt(args[0]);
+  const id = Number(receipt.request_id.split("#").pop());
+  if (!Number.isInteger(id)) throw new Error(`request id ${receipt.request_id} is not an escrow request (<contract>#<n>)`);
+  const out = option(args, "--out") ?? "fulfil-args.json";
+  const { text, signature } = receipt.seal.signature;
+  const callArgs = { id, seal_request_body: receipt.seal.request_body, seal_text: text, signature_hex: toHex(signatureBytes(signature)) };
+  writeFileSync(out, JSON.stringify(callArgs));
+  console.log(`wrote ${out} for request ${receipt.request_id}`);
+}
+
+const COMMANDS: Record<string, (args: string[]) => Promise<void>> = {
+  review,
+  verify,
+  audit,
+  "fulfil-args": fulfilArgs,
+};
+
+const [name, ...args] = process.argv.slice(2);
+const command = COMMANDS[name];
+if (!command) {
+  console.log(USAGE);
+  process.exitCode = name ? 1 : 0;
+} else {
+  command(args).catch((e: unknown) => {
+    console.error(`error: ${e instanceof Error ? e.message : String(e)}`);
+    process.exitCode = 1;
+  });
+}

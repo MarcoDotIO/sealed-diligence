@@ -9,8 +9,9 @@
   },
   "scripts": {
     "diligence": "tsx src/cli.ts",
-    "test": "tsx --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "build": "tsc --noEmit -p . && ./scripts/build-web.sh && cd contract && cargo near build non-reproducible-wasm",
+    "test": "tsc --noEmit -p . && tsx --test test/*.test.ts && cd contract && cargo test --quiet",
+    "test:ts": "tsx --test test/*.test.ts"
   },
   "engines": {
     "node": ">=20"

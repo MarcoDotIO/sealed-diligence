@@ -31,27 +31,28 @@ export async function fetchModelAttestations(model: string, nonceHex: string, ap
   return body.model_attestations;
 }
 
-export function nodeVerifiers(opts: { skipGpu?: boolean; now?: Date } = {}): EvidenceVerifiers {
+const unixSeconds = (d: Date) => BigInt(Math.floor(d.getTime() / 1000));
+
+async function nrasCheck(payload: string): Promise<boolean> {
+  const res = await fetch(NVIDIA_NRAS, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: payload,
+  });
+  if (!res.ok) throw new Error(`NRAS HTTP ${res.status}`);
+  return nrasVerdict(await res.json());
+}
+
+export function nodeVerifiers(opts: { skipGpu?: boolean } = {}): EvidenceVerifiers {
   return {
     async verifyQuote(quote) {
       const collateral = await js_get_collateral(INTEL_PCS, quote);
-      const now = BigInt(Math.floor((opts.now ?? new Date()).getTime() / 1000));
-      return quoteVerdictFromDcap(js_verify(quote, collateral, now));
+      return quoteVerdictFromDcap(js_verify(quote, collateral, unixSeconds(new Date())));
     },
-    verifyGpu: opts.skipGpu
-      ? undefined
-      : async (payload) => {
-          const res = await fetch(NVIDIA_NRAS, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: payload,
-          });
-          if (!res.ok) throw new Error(`NRAS HTTP ${res.status}`);
-          return nrasVerdict(await res.json());
-        },
+    verifyGpu: opts.skipGpu ? async () => null : nrasCheck,
   };
 }
 
-export function verifyModelAttestation(att: ModelAttestation, nonceHex: string, opts: { skipGpu?: boolean } = {}): Promise<AttestationResult> {
-  return verifyEvidence(att, nonceHex, nodeVerifiers(opts));
+export function verifyModelAttestation(att: ModelAttestation, nonceHex: string): Promise<AttestationResult> {
+  return verifyEvidence(att, nonceHex, nodeVerifiers());
 }
