@@ -58,6 +58,7 @@
   .tape::before { top: 9px; } .tape::after { bottom: 9px; }
   .tape span { font-stretch: 125%; font-weight: 800; font-size: 30px; letter-spacing: .06em; text-transform: uppercase; padding-left: 40px; }
   .tape.void { background-color: var(--void); }
+  .tape.end span { padding: 0 34px 0 0; }
 
   /* Headlines on paper */
   .headline { position: absolute; font-stretch: 125%; font-weight: 800; letter-spacing: -0.03em; line-height: .98; }
@@ -81,7 +82,7 @@
   .slip .checks div { font-size: 23px; padding: 10px 0 10px 40px; position: relative; border-bottom: 1px solid var(--rule); line-height: 1.3; opacity: 0; }
   .slip .checks div::before { content: "✓"; position: absolute; left: 4px; color: var(--pass); font-weight: 800; }
   .slip .checks h4 { font-size: 20px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
-  .stamp { position: absolute; right: 90px; top: 74px; font-stretch: 125%; font-weight: 800; font-size: 64px; letter-spacing: .08em; color: var(--cobalt); border: 6px solid var(--cobalt); padding: 8px 26px; transform: rotate(-9deg); opacity: 0; mix-blend-mode: multiply; }
+  .stamp { position: absolute; right: 44px; top: 520px; font-stretch: 125%; font-weight: 800; font-size: 52px; letter-spacing: .08em; color: var(--cobalt); border: 6px solid var(--cobalt); padding: 8px 26px; transform: rotate(-9deg); opacity: 0; mix-blend-mode: multiply; }
 
   /* Review */
   .panel-title { font-stretch: 112%; font-weight: 760; font-size: 30px; margin-bottom: 14px; }
@@ -96,7 +97,8 @@
   .ans .r .sig { font-family: "SF Mono", ui-monospace, monospace; font-size: 18px; color: var(--cobalt); text-align: right; }
   .ans .r.seal { border-bottom: 0; border-top: 3px solid var(--ink); margin-top: 6px; }
   .ans .r.seal b { color: var(--void); font-stretch: 112%; font-size: 30px; }
-  .side-cap { position: absolute; font-size: 22px; color: var(--muted); }
+  .cmd { background: var(--ed-bg); color: var(--ed-text); font: 17px/1.4 "SF Mono", ui-monospace, monospace; padding: 12px 18px; border-radius: 8px; max-width: 740px; }
+  .cmd span { color: #5fd39b; }
 
   /* Browser shot with camera */
   .browser { position: absolute; left: 140px; top: 110px; width: 1640px; height: 800px; background: var(--sheet); border-radius: 10px; overflow: hidden; box-shadow: 0 40px 90px -40px rgba(20,24,32,.55), 0 0 0 1px rgba(30,33,40,.12); }
@@ -105,12 +107,13 @@
   .browser .url { flex: 1; margin-left: 18px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; height: 30px; display: flex; align-items: center; padding: 0 12px; }
   .browser .view { position: absolute; left: 0; right: 0; top: 46px; bottom: 0; overflow: hidden; }
   .browser .view img { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-  .ring { position: absolute; border: 4px solid var(--void); border-radius: 8px; opacity: 0; box-shadow: 0 0 0 9999px rgba(20,22,27,.08); }
+  .ring { position: absolute; border: 4px solid var(--void); border-radius: 8px; opacity: 0; box-shadow: 0 0 0 9999px rgba(20,22,27,.28); }
   .inset { position: absolute; width: 900px; overflow: hidden; background: var(--ed-bg); border-radius: 10px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.6); padding: 14px 0; opacity: 0; z-index: 8; }
   .inset .cap { font: 15px -apple-system, sans-serif; color: #969696; padding: 0 18px 10px; }
-  .inset .ln { font: 19px/32px "SF Mono", ui-monospace, monospace; height: 32px; white-space: pre; color: var(--ed-text); overflow: hidden; }
+  .inset .ln { font: 22px/36px "SF Mono", ui-monospace, monospace; height: 36px; white-space: pre; color: var(--ed-text); overflow: hidden; }
   .inset .ln .tx { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; padding-right: 16px; }
   .inset .cap { font-size: 17px; }
+  .inset .ln .no { width: 92px; }
   .inset .ln .no { width: 52px; padding-right: 16px; }
   .inset .ln .hl { opacity: 1; }
 
@@ -122,7 +125,9 @@
 <div id="root"></div>
 <script>
 // window.TIMELINE is injected by make-video.ts; window.render(t) draws the frame at time t (seconds).
-const FADE = 0.4;
+const DIP = 0.28;
+const VIEW = { left: 140, top: 156, width: 1640, bottom: 910 };
+const INSET_GAP = 18;
 const ED_LINE = 34;
 const root = document.getElementById("root");
 const built = [];
@@ -179,24 +184,25 @@ const tapeHtml = (text, style, cls = "") => `<div class="tape ${cls}" style="${s
 
 const BUILD = {
   editorHook: (s) => editorHtml(s.editor),
-  split: (s) => editorHtml(s.editor) + tapeHtml(s.tape, "left:-140px;width:1150px;top:500px") +
+  split: (s) => editorHtml(s.editor) + tapeHtml(s.tape, "left:-140px;width:1150px;top:500px;justify-content:flex-end", "end") +
     `<div class="headline" style="left:1060px;top:300px;font-size:92px;max-width:12ch">${esc(s.headline)}</div><div class="note" style="left:1064px;top:640px;max-width:24ch">${esc(s.note)}</div>`,
   slip: (s) => {
     const rows = s.rows.map(([k, v, cls]) => `<dt class="row">${esc(k)}</dt><dd class="row ${cls ?? ""}">${esc(v)}</dd>`).join("");
     const checks = s.checks ? `<div class="checks"><h4>The contract checked</h4>${s.checks.map((c) => `<div>${esc(c)}</div>`).join("")}</div>` : "";
     return `<div class="slip"><div class="kind">NEAR testnet transaction</div><div class="method">${esc(s.method)}</div><div class="on">on ${esc(s.contract)}, signed by ${esc(s.signer)}</div>
       <dl>${rows}</dl>${checks}<div class="tx"><span>Transaction <code class="txh"></code></span><span class="pill status"></span></div>${s.stamp ? `<div class="stamp">${esc(s.stamp)}</div>` : ""}</div>` +
-      tapeHtml(s.tape, "left:1020px;width:760px;top:96px;height:74px", "tab");
+      tapeHtml(s.tape, "left:1000px;width:720px;top:116px;height:74px", "tab");
   },
   review: (s) => {
     const att = s.attestation.map((a) => `<div>${esc(a)}</div>`).join("");
     const ans = s.answers.map((a) => `<div class="r${a.seal ? " seal" : ""}">${a.seal ? `<b>${esc(a.title)}</b>` : `<code>${esc(a.path)}</code>`}<span class="sig">sig ${esc(a.sig)}</span>${a.seal ? `<small>${esc(a.detail)}</small>` : `<small><span class="risk ${a.risk}">${esc(a.risk)}</span>, ${esc(a.detail)}</small>`}<span></span></div>`).join("");
     return editorHtml(s.editor) + tapeHtml("Source stays on this side", "left:530px;width:960px;top:500px;height:72px;transform:rotate(-89deg)") +
-      `<div style="position:absolute;left:1110px;top:130px;width:740px"><div class="panel-title">Enclave attestation</div><div class="att">${att}</div><div class="panel-title" style="margin-top:28px">Signed answers</div><div class="ans">${ans}</div></div>` +
+      `<div class="cmd" style="position:absolute;left:1110px;top:118px;opacity:0"><span>$</span> ${esc(s.command)}</div>` +
+      `<div style="position:absolute;left:1110px;top:222px;width:740px"><div class="panel-title">Enclave attestation</div><div class="att">${att}</div><div class="panel-title" style="margin-top:28px">Signed answers</div><div class="ans">${ans}</div></div>` +
       "";
   },
   shot: (s) => `<div class="browser"><div class="bar"><i></i><i></i><i></i><div class="url">${esc(s.url)}</div></div><div class="view"><img src="${s.image}">${(s.rings ?? []).map(() => '<div class="ring"></div>').join("")}</div></div>` +
-    (s.inset ? `<div class="inset" style="left:${s.inset.x}px;top:${s.inset.y}px"><div class="cap">${esc(s.inset.caption)}</div>${s.inset.lines.map((l) => `<div class="ln"><span class="no">${l.n}</span><span class="tx">${highlightTs(l.text)}</span><span class="hl"></span></div>`).join("")}</div>` : ""),
+    (s.inset ? `<div class="inset" style="left:${s.inset.x}px;top:${s.inset.y}px;width:${s.inset.w ?? 900}px"><div class="cap">${esc(s.inset.caption)}</div>${s.inset.lines.map((l) => `<div class="ln"><span class="no">${l.n}</span><span class="tx">${highlightTs(l.text)}</span><span class="hl"></span></div>`).join("")}</div>` : ""),
   tamper: (s) => editorHtml(s.editor) + `<div class="cut" style="position:absolute;inset:0;opacity:0">${BUILD.shot({ ...s.shot })}</div><div class="flash"></div>`,
   outro: (s) => `<div class="headline" style="left:140px;top:200px;font-size:110px;max-width:14ch">${esc(s.headline)}</div>` +
     tapeHtml(s.tape, "left:-80px;right:-80px;top:560px;transform:rotate(-2.2deg)") +
@@ -206,7 +212,7 @@ const BUILD = {
 function build(s) {
   const el = document.createElement("div");
   el.className = "scene";
-  el.innerHTML = (s.type === "editorHook" ? "" : brandHtml() + stepHtml(s)) + BUILD[s.type](s) + (s.subtitle ? `<div class="subtitle">${esc(s.subtitle)}</div>` : "");
+  el.innerHTML = (s.type === "editorHook" ? "" : brandHtml() + stepHtml(s)) + BUILD[s.type](s) + '<div class="subtitle"></div>';
   root.appendChild(el);
   return el;
 }
@@ -237,6 +243,11 @@ function animateShot(el, s, local) {
     Object.assign(ring.style, { left: `${x - 10}px`, top: `${y - 8}px`, width: `${r.rect[2] * b + 20}px`, height: `${r.rect[3] * b + 16}px`, opacity: String(Math.min(after(local, r.from), 1 - after(local, r.to ?? 99))) });
   });
   const inset = el.querySelector(".inset");
+  if (inset && s.inset?.under !== undefined) {
+    const ring = view.querySelectorAll(".ring")[s.inset.under];
+    const top = VIEW.top + parseFloat(ring.style.top) + parseFloat(ring.style.height) + INSET_GAP;
+    Object.assign(inset.style, { left: `${VIEW.left}px`, width: `${VIEW.width}px`, top: `${top}px`, height: `${VIEW.bottom - top}px`, borderRadius: "0 0 10px 10px" });
+  }
   if (inset && s.inset) {
     const p = easeOut(after(local, s.inset.at, 0.5)) * (1 - after(local, s.inset.to ?? 99, 0.4));
     inset.style.opacity = String(p);
@@ -263,22 +274,23 @@ function animateEditor(el, ed, local) {
   if (ed.typing) typeIn(el, ed, local);
 }
 
-/** Select the old text on one line, then type the replacement character by character. */
+/** Select just the score inside its line, then type the replacement character by character. */
 function typeIn(el, ed, local) {
-  const { file, line, find, replace, selectAt, typeAt } = ed.typing;
+  const { file, line, context, select, replace, selectAt, typeAt } = ed.typing;
   const ln = el.querySelector(`.ed-pane[data-i="${file}"] .ln[data-n="${line}"] .tx`);
   const src = ed.files[file].lines[line - 1];
-  const i = src.indexOf(find);
-  const typed = Math.max(0, Math.min(replace.length, Math.floor((local - typeAt) / 0.28) + 1));
-  const before = esc(src.slice(0, i)), afterText = esc(src.slice(i + find.length));
+  const at = src.indexOf(context) + context.indexOf(select);
+  const head = highlightMd(src.slice(0, at)), tail = highlightMd(src.slice(at + select.length));
+  const typed = Math.max(0, Math.min(replace.length, Math.floor((local - typeAt) / 0.22) + 1));
   if (local < selectAt) ln.innerHTML = highlightMd(src);
-  else if (local < typeAt) ln.innerHTML = `${before}<span class="sel">${esc(find)}</span>${afterText}`;
-  else ln.innerHTML = `${before}<span class="c-b">${esc(replace.slice(0, typed))}</span><span class="cursor"></span>${afterText}`;
+  else if (local < typeAt) ln.innerHTML = `${head}<span class="sel">${esc(select)}</span>${tail}`;
+  else ln.innerHTML = `${head}${esc(replace.slice(0, typed))}<span class="cursor"></span>${tail}`;
 }
 
 function animateSlip(el, s, local) {
   el.querySelectorAll(".slip .row").forEach((r, i) => {
-    const p = s.rowsFrom === 0 ? 1 : easeOut(after(local, 0.6 + Math.floor(i / 2) * s.rowGap, 0.35));
+    const at = s.rowTimes?.[Math.floor(i / 2)];
+    const p = at === undefined ? 1 : easeOut(after(local, at, 0.35));
     r.style.opacity = String(p);
     r.style.transform = `translateY(${(1 - p) * 12}px)`;
   });
@@ -287,15 +299,17 @@ function animateSlip(el, s, local) {
   tab.style.opacity = String(tp > 0 ? 1 : 0);
   tab.style.transform = `rotate(-4deg) scale(${lerp(1.25, 1, tp)})`;
   const txAt = s.txAt ?? s.tapeAt;
-  el.querySelector(".txh").textContent = local >= txAt ? s.tx : "";
+  el.querySelector(".txh").textContent = s.tx;
+  el.querySelector(".slip .tx span").style.visibility = local >= txAt ? "visible" : "hidden";
   const status = el.querySelector(".status");
   const st = s.statuses.filter((x) => local >= x.at).pop();
   status.textContent = st ? st.text : "";
+  status.style.visibility = st ? "visible" : "hidden";
   status.style.color = st?.color ?? "var(--muted)";
   const checks = el.querySelector(".slip .checks");
   if (checks) {
-    checks.style.opacity = String(after(local, s.checksAt, 0.4));
-    checks.querySelectorAll("div").forEach((d, i) => (d.style.opacity = String(after(local, s.checksAt + 0.5 + i * 0.7, 0.3))));
+    checks.style.opacity = String(after(local, s.checkTimes[0] - 0.4, 0.4));
+    checks.querySelectorAll("div").forEach((d, i) => (d.style.opacity = String(after(local, s.checkTimes[i], 0.3))));
   }
   const fee = el.querySelector("dd.fee");
   if (fee && s.feePaid && local >= s.feePaid.at) fee.textContent = s.feePaid.text;
@@ -309,6 +323,10 @@ function animateSlip(el, s, local) {
 
 function animateReview(el, s, local) {
   animateEditor(el, s.editor, local);
+  const cmd = el.querySelector(".cmd");
+  const c = easeOut(after(local, s.commandAt, 0.35));
+  cmd.style.opacity = String(c);
+  cmd.style.transform = `translateY(${(1 - c) * 10}px)`;
   el.querySelectorAll(".att div").forEach((d, i) => (d.style.opacity = String(after(local, s.attAt[i], 0.3))));
   el.querySelectorAll(".ans .r").forEach((r, i) => {
     const p = easeOut(after(local, s.answerAt[i], 0.35));
@@ -318,8 +336,9 @@ function animateReview(el, s, local) {
 }
 
 function animateSplit(el, s, local) {
+  animateEditor(el, s.editor, local);
   const editor = el.querySelector(".editor");
-  const p = ease(after(local, 0.2, 0.9));
+  const p = ease(after(local, s.shrinkAt ?? 0.2, 0.9));
   editor.style.transformOrigin = "0 0";
   editor.style.transform = `translate(${lerp(0, -40, p)}px, ${lerp(0, 150, p)}px) scale(${lerp(1, 0.56, p)})`;
   editor.style.filter = `blur(${after(local, s.tapeAt, 0.5) * 5}px)`;
@@ -344,7 +363,7 @@ function animateTamper(el, s, local) {
 
 function animateOutro(el, s, local) {
   const tape = el.querySelector(".tape");
-  tape.style.clipPath = `inset(0 ${100 - 100 * ease(after(local, 0.5, 0.7))}% 0 0)`;
+  tape.style.clipPath = `inset(0 ${100 - 100 * ease(after(local, s.tapeAt ?? 0.5, 0.7))}% 0 0)`;
 }
 
 const ANIMATE = {
@@ -357,13 +376,26 @@ const ANIMATE = {
   outro: animateOutro,
 };
 
+/** Show the sentence being spoken; hide between sentences. */
+function animateSubtitle(el, s, local) {
+  const sub = el.querySelector(".subtitle");
+  const current = (s.subs ?? []).find((x) => local >= x.from && local <= x.to);
+  sub.style.visibility = current ? "visible" : "hidden";
+  if (current && sub.textContent !== current.text) sub.textContent = current.text;
+}
+
 window.render = (t) => {
   window.TIMELINE.forEach((s, i) => {
     const el = (built[i] ??= build(s));
     const local = t - s.start;
-    const visible = local >= -FADE && local <= s.dur;
-    el.style.opacity = visible ? String(Math.min(clamp01(local / FADE + 1), clamp01((s.dur - local) / FADE))) : "0";
-    if (visible) ANIMATE[s.type](el, s, Math.max(0, local));
+    const next = window.TIMELINE[i + 1];
+    const visible = local >= 0 && local < s.dur;
+    const fadeIn = s.cutIn ? 1 : clamp01(local / DIP);
+    const fadeOut = next?.cutIn ? 1 : clamp01((s.dur - local) / DIP);
+    el.style.opacity = visible ? String(Math.min(fadeIn, fadeOut)) : "0";
+    if (!visible) return;
+    ANIMATE[s.type](el, s, Math.max(0, local));
+    animateSubtitle(el, s, local);
   });
 };
 

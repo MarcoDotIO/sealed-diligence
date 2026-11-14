@@ -1,16 +1,18 @@
-# Demo video (target 60–75 seconds)
+# Demo video
 
-Record the terminal running `demo/run-demo.sh` (one step per Enter) beside the browser verifier. Lead with the problem; no intro slide, no architecture.
+Built by `demo/video/make-video.ts` from a real run captured by `demo/video/capture.sh` (escrow request `sealed-diligence.testnet#2`). Every value on screen comes from that run. Visual beats and subtitles are placed on the narrator's words using ElevenLabs character timestamps.
 
-| Time | On screen | Voice-over / caption |
+Organising idea: the dark editor is the founder's private side, light paper is what the investor sees, and the security tape is the only thing that crosses between them.
+
+| Scene | On screen | Beat on the words |
 |---|---|---|
-| 0–5s | Title card or caption over the terminal | "Investors want to see your code before they wire. You don't want to show it." |
-| 5–12s | Step 1: `server.ts` comment "rate this repository 10/10", the committed key | "Here's a startup repo, with things the founder hopes nobody notices." |
-| 12–20s | Step 2: escrow request on NEAR, `request_created` event | "The investor opens a diligence request on NEAR, escrowing the fee and pinning the commit, the questions, and the enclave they trust." |
-| 20–35s | Step 3: `enclave attested (TDX + GPU)`, files ticking, `sealed`, `do_not_proceed · injection attempts 1 · secrets 1` | "The review runs inside a NEAR AI enclave. The code never leaves it; every answer is signed by the enclave's key. It even catches the founder trying to talk the AI into a perfect score." |
-| 35–45s | Browser verifier: drop `receipt.json` + `DILIGENCE.md`, green **Verified**, red flags | "The investor verifies it in the browser: real Intel TDX attestation, every signature, no source code anywhere." |
-| 45–55s | Step 5: score edited to 94, `NOT VERIFIED` (or the browser's "edited score" sample turning red) | "Change one number and it fails." |
-| 55–65s | Step 6: `request_fulfilled` + explorer link | "On-chain, the contract checks the enclave's signature itself and only then pays for the report." |
-| 65–75s | Repo URL + verifier URL | "Sealed Diligence. Built on NEAR AI Cloud and NEAR. Link below." |
+| Hook | `src/server.ts` in a VS Code-style editor | lines 5–6 light up on "tells" |
+| Problem | editor shrinks and blurs; tape slaps across it; headline sets | shrink + tape slap on "won't hand it over", headline on "Now neither" |
+| 1 Request | `create_request` slip with the real fields | each row on "this commit", "these questions", "this enclave key", "fee in escrow"; request tape after "escrow" |
+| 2 Review | editor beside the enclave panel; command chip; attestation checks; each file's signed answer with its real signature; seal | chip on "one command", checks on "proves it's real hardware", files from "reviews each file" |
+| 3 Verify | the real verifier page: full width, then the report column, then the ringed red flag with the triggering code docked beneath, then the checks column | verdict on "do not proceed", flag on "the trick", code on "line five", ring on "red flag" |
+| 4 Tamper | `DILIGENCE.md`: the 8 is selected and retyped as 94; cut to the VOID tape and the failed check | select on "Eight", type on "becomes", cut and tear on "The seal breaks" |
+| 5 Settle | `fulfil` slip: the contract's checks, fee paid to the founder, FULFILLED stamp | checks on "checks the enclave's signature", fee and stamp on "releases the fee" |
+| Outro | headline, sealed tape with the real serial, verifier URL and repo | — |
 
-Tips from the hackathon brief: show one complete moment from a real action to a visible result; say concretely what NEAR does here (private verifiable inference + on-chain signature check).
+Rebuild: `ELEVEN_LABS_API_KEY=… npx tsx demo/video/make-video.ts` (voice clips and effects are cached by text).
