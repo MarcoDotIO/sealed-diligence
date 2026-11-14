@@ -4,33 +4,46 @@
 <meta charset="utf-8" />
 <title>Sealed Diligence demo stage</title>
 <style>
-  :root { --bg:#0b0d10; --panel:#14171c; --line:#262b33; --text:#e8eaed; --muted:#8b949e; --good:#3ecf8e; --bad:#ff5d5d; --warn:#f5b84a; --accent:#7aa2ff; }
+  @font-face { font-family: "Archivo"; src: url("archivo.woff2") format("woff2"); font-weight: 100 900; font-stretch: 62% 125%; }
+  :root { --paper:#e8ebee; --sheet:#f6f7f8; --ink:#1e2128; --muted:#5b6270; --rule:#c8cdd4; --cobalt:#2443c9; --void:#cc2a2f; --pass:#1d7a4c; --graphite:#23262d; --term-text:#e6e8ec; --term-muted:#8d95a3; --term-ok:#5fd39b; --term-bad:#ff7b7f; --term-hi:#9fb1ff; }
   * { box-sizing: border-box; margin: 0; }
-  html, body { width: 1920px; height: 1080px; overflow: hidden; color: var(--text); font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif; }
-  body { background: radial-gradient(1200px 700px at 20% 10%, #18202e 0%, transparent 60%), radial-gradient(900px 600px at 90% 100%, #1b1726 0%, transparent 60%), var(--bg); }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--paper); color: var(--ink); font-family: "Archivo", sans-serif; }
   .scene { position: absolute; inset: 0; opacity: 0; }
-  .brand { position: absolute; top: 40px; left: 56px; font-size: 22px; letter-spacing: .02em; color: var(--muted); }
-  .brand b { color: var(--text); font-weight: 600; }
-  .step { position: absolute; top: 40px; right: 56px; font-size: 22px; color: var(--muted); }
-  .title { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 0 200px; }
-  .title h1 { font-size: 76px; line-height: 1.12; font-weight: 700; letter-spacing: -0.02em; }
-  .title p { margin-top: 28px; font-size: 32px; color: var(--muted); }
-  .accent { color: var(--accent); }
-  .window { position: absolute; left: 160px; top: 110px; width: 1600px; height: 770px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 40px 120px rgba(0,0,0,.55); }
-  .bar { height: 44px; border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 18px; gap: 8px; color: var(--muted); font-size: 16px; }
-  .bar i { width: 13px; height: 13px; border-radius: 50%; background: #3a3f47; display: inline-block; }
+  .brand { position: absolute; top: 38px; left: 64px; display: flex; align-items: center; gap: 14px; font-stretch: 125%; font-weight: 760; font-size: 24px; }
+  .brand img { width: 40px; height: 40px; }
+  .step { position: absolute; top: 40px; right: 64px; display: flex; align-items: baseline; gap: 14px; font-size: 24px; color: var(--muted); }
+  .step b { font-stretch: 125%; font-weight: 800; font-size: 34px; color: var(--cobalt); }
+
+  .title { position: absolute; left: 140px; right: 140px; top: 170px; }
+  .title h1 { font-stretch: 125%; font-weight: 800; font-size: 104px; line-height: 0.98; letter-spacing: -0.03em; max-width: 15ch; }
+  .title p { margin-top: 30px; font-size: 34px; color: var(--muted); max-width: 46ch; }
+  .facts { position: absolute; left: 140px; right: 140px; bottom: 120px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; border-top: 3px solid var(--ink); padding-top: 26px; }
+  .facts b { display: block; font-stretch: 112%; font-weight: 760; font-size: 30px; margin-bottom: 8px; }
+  .facts span { font-size: 25px; color: var(--muted); line-height: 1.35; }
+
+  .tape { position: absolute; left: -80px; right: -80px; height: 92px; transform: rotate(-2.2deg); background: var(--cobalt); color: var(--sheet); display: flex; align-items: center; white-space: nowrap; overflow: hidden; box-shadow: 0 16px 30px -18px rgba(0,0,0,.5); }
+  .tape::before, .tape::after { content: ""; position: absolute; left: 0; right: 0; height: 4px; background: repeating-linear-gradient(90deg, var(--sheet) 0 20px, transparent 20px 36px); opacity: .55; }
+  .tape::before { top: 9px; } .tape::after { bottom: 9px; }
+  .tape span { font-stretch: 125%; font-weight: 800; font-size: 30px; letter-spacing: .06em; text-transform: uppercase; padding-left: 40px; }
+
+  .window { position: absolute; left: 140px; top: 120px; width: 1640px; height: 770px; border-radius: 10px; overflow: hidden; box-shadow: 0 30px 80px -30px rgba(20,24,32,.55), 0 0 0 1px rgba(30,33,40,.12); }
+  .terminal { background: var(--graphite); }
+  .browser { background: var(--sheet); }
+  .bar { height: 46px; display: flex; align-items: center; padding: 0 18px; gap: 8px; font-size: 17px; }
+  .terminal .bar { color: var(--term-muted); border-bottom: 1px solid #343842; }
+  .browser .bar { color: var(--muted); border-bottom: 1px solid var(--rule); background: #eef0f2; }
+  .bar i { width: 13px; height: 13px; border-radius: 50%; background: #50555f; display: inline-block; }
+  .browser .bar i { background: #c3c8cf; }
   .bar span { margin-left: 14px; }
-  .url { flex: 1; margin-left: 18px; background: #0d1014; border: 1px solid var(--line); border-radius: 8px; height: 28px; display: flex; align-items: center; padding: 0 12px; font-size: 15px; color: var(--muted); }
-  .term { padding: 26px 34px; font: 27px/1.45 "SF Mono", ui-monospace, Menlo, monospace; white-space: pre; }
-  .term .cmd { color: #fff; } .term .cmd::before { content: "$ "; color: var(--good); }
-  .ok { color: var(--good); } .bad { color: var(--bad); } .dim { color: var(--muted); } .hi { color: var(--warn); }
-  .cursor { display: inline-block; width: 13px; height: 26px; background: #fff; vertical-align: -4px; }
-  .shot { position: absolute; left: 0; right: 0; top: 44px; bottom: 0; overflow: hidden; }
+  .url { flex: 1; margin-left: 18px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; height: 30px; display: flex; align-items: center; padding: 0 12px; }
+  .term { padding: 26px 34px; color: var(--term-text); font: 27px/1.45 "SF Mono", ui-monospace, Menlo, monospace; white-space: pre; }
+  .term .cmd::before { content: "$ "; color: var(--term-ok); }
+  .ok { color: var(--term-ok); } .bad { color: var(--term-bad); } .dim { color: var(--term-muted); } .hi { color: var(--term-hi); }
+  .cursor { display: inline-block; width: 13px; height: 27px; background: var(--term-text); vertical-align: -4px; }
+  .shot { position: absolute; left: 0; right: 0; top: 46px; bottom: 0; overflow: hidden; }
   .shot img { position: absolute; left: 0; width: 100%; }
-  .caption { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); width: max-content; max-width: 1560px; text-align: center; font-size: 33px; line-height: 1.35; padding: 12px 28px; background: rgba(8,10,13,.86); border-radius: 12px; }
-  .points { margin-top: 48px; display: flex; gap: 28px; }
-  .points div { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 22px 28px; font-size: 26px; text-align: left; width: 460px; line-height: 1.35; }
-  .points b { display: block; color: var(--accent); font-size: 19px; margin-bottom: 10px; letter-spacing: .06em; text-transform: uppercase; }
+
+  .caption { position: absolute; left: 140px; bottom: 50px; max-width: 1640px; font-size: 32px; line-height: 1.3; font-weight: 500; }
 </style>
 </head>
 <body>
@@ -40,7 +53,9 @@
 const FADE = 0.45;
 const CHARS_PER_SECOND = 40;
 const AFTER_COMMAND = 0.35;
-const SHOT_VIEW_HEIGHT = 726;
+const SHOT_VIEW_HEIGHT = 724;
+const WINDOW_WIDTH = 1640;
+const TAPE_REPEATS = 6;
 const root = document.getElementById("root");
 const built = [];
 
@@ -56,30 +71,35 @@ function lineClass(text) {
   return "";
 }
 
-function windowFrame(scene, inner) {
-  const head = scene.url
-    ? `<div class="bar"><i></i><i></i><i></i><div class="url">${escapeHtml(scene.url)}</div></div>`
-    : `<div class="bar"><i></i><i></i><i></i><span>${escapeHtml(scene.windowTitle ?? "terminal")}</span></div>`;
-  return `<div class="window">${head}${inner}</div>`;
+function tape(scene) {
+  if (!scene.tape) return "";
+  const text = Array(TAPE_REPEATS).fill(escapeHtml(scene.tape)).join("  ◆  ");
+  return `<div class="tape" style="top:${scene.tapeTop ?? 640}px"><span>${text}</span></div>`;
+}
+
+function chrome(scene) {
+  const brand = `<div class="brand"><img src="mark.svg" alt="">Sealed Diligence</div>`;
+  const step = scene.step ? `<div class="step"><b>${scene.step[0]}</b>${escapeHtml(scene.step[1])}</div>` : "";
+  return brand + step;
+}
+
+function windowHtml(scene) {
+  if (scene.type === "terminal") {
+    return `<div class="window terminal"><div class="bar"><i></i><i></i><i></i><span>${escapeHtml(scene.windowTitle ?? "terminal")}</span></div><div class="term"></div></div>`;
+  }
+  return `<div class="window browser"><div class="bar"><i></i><i></i><i></i><div class="url">${escapeHtml(scene.url)}</div></div><div class="shot"><img src="${scene.image}"></div></div>`;
 }
 
 function titleHtml(scene) {
   const sub = scene.sub ? `<p>${scene.sub}</p>` : "";
-  const points = scene.points
-    ? `<div class="points">${scene.points.map(([k, v]) => `<div><b>${k}</b>${v}</div>`).join("")}</div>`
-    : "";
-  return `<div class="title"><h1>${scene.html}</h1>${sub}${points}</div>`;
+  const facts = scene.facts ? `<div class="facts">${scene.facts.map(([k, v]) => `<div><b>${k}</b><span>${v}</span></div>`).join("")}</div>` : "";
+  return `<div class="title"><h1>${scene.html}</h1>${sub}</div>${tape(scene)}${facts}`;
 }
 
 function build(scene) {
   const el = document.createElement("div");
   el.className = "scene";
-  const brand = `<div class="brand"><b>Sealed Diligence</b> · NEAR HACKATHON</div>${scene.step ? `<div class="step">${scene.step}</div>` : ""}`;
-  const body = {
-    title: () => titleHtml(scene),
-    terminal: () => brand + windowFrame(scene, `<div class="term"></div>`),
-    shot: () => brand + windowFrame(scene, `<div class="shot"><img src="${scene.image}"></div>`),
-  }[scene.type]();
+  const body = scene.type === "title" ? (scene.brand ? chrome({}) : "") + titleHtml(scene) : chrome(scene) + windowHtml(scene);
   el.innerHTML = body + (scene.caption ? `<div class="caption">${scene.caption}</div>` : "");
   root.appendChild(el);
   return el;
@@ -108,8 +128,10 @@ function terminalAt(scene, local) {
 function panShot(el, scene, local) {
   const img = el.querySelector(".shot img");
   const progress = ease(clamp01((local - (scene.panStart ?? 1)) / (scene.panDur ?? 4)));
-  const maxShift = Math.max(0, img.naturalHeight * (1600 / img.naturalWidth) - SHOT_VIEW_HEIGHT);
-  img.style.top = `${-progress * Math.min(maxShift, scene.panPx ?? maxShift)}px`;
+  const maxShift = Math.max(0, img.naturalHeight * (WINDOW_WIDTH / img.naturalWidth) - SHOT_VIEW_HEIGHT);
+  const from = Math.min(maxShift, scene.panFrom ?? 0);
+  const to = Math.min(maxShift, scene.panPx ?? maxShift);
+  img.style.top = `${-(from + progress * (to - from))}px`;
 }
 
 window.render = (t) => {
@@ -121,6 +143,8 @@ window.render = (t) => {
     if (!visible) return;
     if (scene.type === "terminal") el.querySelector(".term").innerHTML = terminalAt(scene, Math.max(0, local));
     if (scene.type === "shot") panShot(el, scene, local);
+    const t2 = el.querySelector(".tape");
+    if (t2) t2.style.clipPath = `inset(0 ${100 - 100 * ease(clamp01((local - (scene.tapeAt ?? 0.6)) / 0.7))}% 0 0)`;
   });
 };
 

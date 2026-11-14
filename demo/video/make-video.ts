@@ -16,8 +16,8 @@ const OUT = join(HERE, "out");
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const FPS = 30;
 const SIZE = { width: 1920, height: 1080 };
-const SHOT_VIEWPORT = { width: 880, height: 1000 };
-const SHOT_SCALE = 2;
+const SHOT_VIEWPORT = { width: 1280, height: 720 };
+const SHOT_SCALE = 1.25;
 const VOICE_PAD = 0.9;
 /** Social platforms play around -14 LUFS; normalize so the voice isn't quiet next to other posts. */
 const LOUDNESS = "loudnorm=I=-14:TP=-1.5:LRA=11";
@@ -39,24 +39,28 @@ const readCapture = (name: string) =>
     .trimEnd()
     .split("\n");
 
-function staticServer(dir: string): Promise<{ server: Server; url: string }> {
-  const types: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json", ".md": "text/markdown" };
+/** Serves the built verifier from docs/, plus the captured receipt under /capture/. */
+function staticServer(docs: string): Promise<{ server: Server; url: string }> {
+  const types: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json", ".md": "text/markdown", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
   const server = createServer((req, res) => {
-    const path = join(dir, decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname).replace(/\/$/, "/index.html"));
-    if (!path.startsWith(dir) || !existsSync(path)) return void res.writeHead(404).end();
+    const pathname = decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname).replace(/\/$/, "/index.html");
+    const [root, rel] = pathname.startsWith("/capture/") ? [CAPTURE, pathname.slice("/capture".length)] : [docs, pathname];
+    const path = join(root, rel);
+    if (!path.startsWith(root) || !existsSync(path)) return void res.writeHead(404).end();
     res.writeHead(200, { "Content-Type": types[extname(path)] ?? "application/octet-stream" });
     createReadStream(path).pipe(res);
   });
   return new Promise((r) => server.listen(0, () => r({ server, url: `http://localhost:${(server.address() as { port: number }).port}/` })));
 }
 
-async function verifierShot(browser: Browser, url: string, diligence: string, out: string): Promise<void> {
-  const page = await browser.newPage({ viewport: SHOT_VIEWPORT, deviceScaleFactor: SHOT_SCALE, colorScheme: "dark" });
-  await page.goto(url);
-  await page.setInputFiles("#file", [join(CAPTURE, "receipt.json"), diligence]);
-  await page.waitForSelector("#result:not([hidden])", { timeout: 120_000 });
-  await page.waitForTimeout(500);
-  await page.screenshot({ path: out, fullPage: true });
+/** Opens the verifier on the captured receipt through its own shareable-link parameters. */
+async function verifierShot(browser: Browser, url: string, diligenceFile: string, out: string, framing: "full-page" | "at-tape"): Promise<void> {
+  const page = await browser.newPage({ viewport: SHOT_VIEWPORT, deviceScaleFactor: SHOT_SCALE, colorScheme: "light" });
+  await page.goto(`${url}?receipt=capture/receipt.json&md=capture/${diligenceFile}`);
+  await page.waitForSelector('#tape[data-state="sealed"], #tape[data-state="void"]', { timeout: 120_000 });
+  await page.waitForTimeout(1200);
+  if (framing === "at-tape") await page.evaluate("window.scrollTo(0, document.querySelector('.tape-zone').offsetTop - 330)");
+  await page.screenshot({ path: out, fullPage: framing === "full-page" });
   await page.close();
 }
 
@@ -93,60 +97,67 @@ async function synthesize(text: string, file: string): Promise<string> {
   return mp3;
 }
 
+function sealSerial(): string {
+  const receipt = JSON.parse(readFileSync(join(CAPTURE, "receipt.json"), "utf8")) as { request_id: string; commit: string; enclave_key: string };
+  return `Sealed ◆ ${receipt.request_id} ◆ commit ${receipt.commit.slice(0, 8)} ◆ enclave ${receipt.enclave_key.slice(0, 8)}`;
+}
+
+const VERIFIER_URL = "marcodotio.github.io/sealed-diligence";
+
 function scenes(): Scene[] {
-  const list: Scene[] = [
+  return [
     {
-      type: "title",
-      html: 'Investors want to see your code<br>before they wire.<br><span class="accent">Founders don\'t want to show it.</span>',
+      type: "title", brand: true,
+      html: "Investors want to see your code before they wire. Founders don't want to show it.",
+      tape: "Sealed Diligence ◆ check before you trust", tapeTop: 760, tapeAt: 1.2,
       voice: "Investors want to see your code before they wire. Founders don't want to show it.",
     },
     {
-      type: "terminal", step: "1 · The founder's private repo", windowTitle: "acme-orders", lines: readCapture("1-repo.txt"),
-      caption: "Hidden: a note asking AI reviewers for a perfect score, and a live payment key",
+      type: "terminal", step: ["1", "The founder's private repo"], windowTitle: "acme-orders", lines: readCapture("1-repo.txt"),
+      caption: "It hides a note asking AI reviewers for a perfect score, and a live payment key.",
       voice: "Here's a startup's private repo. It hides a comment asking A.I. reviewers for a perfect score, and a live payment key.",
     },
     {
-      type: "terminal", step: "2 · The investor's request, on NEAR", windowTitle: "investor", lines: readCapture("2-request.txt"),
-      caption: "Escrowed fee · pinned commit, question pack and enclave key",
+      type: "terminal", step: ["2", "The investor asks on NEAR"], windowTitle: "investor", lines: readCapture("2-request.txt"),
+      caption: "The fee is escrowed. The commit, the questions and the trusted enclave key are pinned.",
       voice: "The investor opens a diligence request on NEAR. It escrows a fee, and pins the commit, the questions, and the enclave they trust.",
     },
     {
-      type: "terminal", step: "3 · Sealed review inside NEAR AI", windowTitle: "founder", lines: readCapture("3-review.txt"), lineGap: 0.75,
-      caption: "Enclave attested before any code leaves the machine · every answer signed",
+      type: "terminal", step: ["3", "Sealed review inside NEAR AI"], windowTitle: "founder", lines: readCapture("3-review.txt"), lineGap: 0.75,
+      caption: "The enclave proves its hardware before any code leaves the machine. Every answer is signed.",
       voice: "The founder runs Sealed Diligence. It verifies the NEAR A.I. enclave's Intel and NVIDIA attestation first. Then each file is reviewed inside it, and every answer comes back signed.",
     },
     {
-      type: "shot", step: "4 · The investor verifies, in the browser", url: "Sealed Diligence Verifier · runs locally in your browser",
-      image: "verified.png", panStart: 3.5, panDur: 7, panPx: 1500,
-      caption: "Real Intel TDX attestation · every signature · zero source code",
+      type: "shot", step: ["4", "The investor checks the seal"], url: VERIFIER_URL,
+      image: "verified.png", panFrom: 420, panStart: 3.2, panDur: 8, panPx: 1750,
+      caption: "Real Intel TDX attestation and every signature, checked in the browser. No source code anywhere.",
       voice: "The investor checks it in the browser. Real hardware attestation, every signature, and no source code anywhere. The verdict: do not proceed, with the injection attempt flagged as an integrity red flag.",
     },
     {
-      type: "shot", step: "5 · The founder edits one score", url: "Sealed Diligence Verifier · runs locally in your browser",
-      image: "tampered.png", panStart: 1.2, panDur: 2.2,
-      caption: "One edited number → not verified",
+      type: "shot", step: ["5", "The founder edits one score"], url: VERIFIER_URL,
+      image: "tampered.png", panStart: 99,
+      caption: "One edited number, and the seal reads VOID.",
       voice: "Change a single score, and it no longer verifies.",
     },
     {
-      type: "terminal", step: "6 · Paid on-chain", windowTitle: "founder", lines: readCapture("6-fulfil.txt"),
-      caption: "The contract checks the enclave's ed25519 signature itself, then pays · request is Fulfilled",
+      type: "terminal", step: ["6", "Paid on-chain"], windowTitle: "founder", lines: readCapture("6-fulfil.txt"),
+      caption: "The contract checks the enclave's signature itself, then pays. The request reads Fulfilled.",
       minDur: 10.5,
       voice: "On chain, the contract checks the enclave's signature itself, and only then pays for the report.",
     },
+    {
+      type: "title", brand: true,
+      html: "Read the code review. Never see the code.",
+      tape: sealSerial(), tapeTop: 470, tapeAt: 0.5,
+      facts: [
+        ["NEAR AI Cloud", "Reviews run in attested Intel TDX and NVIDIA GPU enclaves. Every answer is signed."],
+        ["NEAR contract", "Checks the enclave's signature on-chain before it pays for a report."],
+        ["Open source", "github.com/MarcoDotIO/sealed-diligence"],
+      ],
+      voice: "Sealed Diligence. Read the code review, never see the code. Built on NEAR A.I. and NEAR.",
+      minDur: 6.5,
+    },
   ];
-  list.push({
-    type: "title",
-    html: 'Sealed <span class="accent">Diligence</span>',
-    sub: "Private code. Verifiable diligence.",
-    points: [
-      ["NEAR AI Cloud", "Review runs in attested TDX + GPU enclaves; every answer is signed"],
-      ["NEAR contract", "Verifies the enclave signature on-chain before paying"],
-      ["Open source", "github.com/MarcoDotIO/sealed-diligence"],
-    ],
-    voice: "Sealed Diligence. Private code, verifiable diligence. Built on NEAR A.I. and NEAR.",
-    minDur: 6,
-  });
-  return list;
 }
 
 async function renderFrames(browser: Browser, timeline: Scene[], total: number, video: string): Promise<void> {
@@ -184,13 +195,15 @@ function mixAudio(timeline: Scene[], clips: (string | null)[], total: number, ou
 
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
-  writeFileSync(join(OUT, "stage.html"), readFileSync(join(HERE, "stage.html")));
+  for (const [from, to] of [[join(HERE, "stage.html"), "stage.html"], [join(ROOT, "web/assets/archivo.woff2"), "archivo.woff2"], [join(ROOT, "web/assets/mark.svg"), "mark.svg"]]) {
+    writeFileSync(join(OUT, to), readFileSync(from));
+  }
   const browser = await chromium.launch({ executablePath: CHROME, headless: true });
   const { server, url } = await staticServer(join(ROOT, "docs"));
 
   console.log("screenshots…");
-  await verifierShot(browser, url, join(CAPTURE, "DILIGENCE.md"), join(OUT, "verified.png"));
-  await verifierShot(browser, url, join(CAPTURE, "DILIGENCE.tampered.md"), join(OUT, "tampered.png"));
+  await verifierShot(browser, url, "DILIGENCE.md", join(OUT, "verified.png"), "full-page");
+  await verifierShot(browser, url, "DILIGENCE.tampered.md", join(OUT, "tampered.png"), "at-tape");
   server.close();
 
   console.log(`voice-over (${elevenKey() ? "ElevenLabs" : "macOS say"})…`);
