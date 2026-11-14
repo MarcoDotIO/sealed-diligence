@@ -22,7 +22,7 @@ function makeRepo(): string {
   g("init", "-q", "-b", "main");
   writeFileSync(join(dir, "README.md"), "# Orders API\nA fast orders API with full test coverage.\n");
   writeFileSync(join(dir, "server.ts"), `${INJECTION}\nexport const handler = (q: string) => db.query("SELECT * FROM orders WHERE id=" + q);\n`);
-  writeFileSync(join(dir, "config.ts"), `export const STRIPE_KEY = "sk_live_51HxQe2FAKEFAKEFAKE";\n`);
+  writeFileSync(join(dir, "config.ts"), `export const STRIPE_KEY = "acmepay_live_9f3Kq7Zr2LwX8vN4";\n`);
   writeFileSync(join(dir, "logo.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0]));
   g("add", ".");
   g("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init");
@@ -44,7 +44,7 @@ async function fakeEnclave(): Promise<EnclaveClient> {
       if (sys === FILE_SYSTEM) {
         const findings = [];
         if (user.includes("ignore previous instructions")) findings.push({ kind: "injection_attempt", severity: "high", summary: "Comment tries to instruct the reviewer to inflate the score." });
-        if (user.includes("sk_live_")) findings.push({ kind: "hardcoded_secret", severity: "critical", summary: "A live payment API key is committed." });
+        if (user.includes("acmepay_live_")) findings.push({ kind: "hardcoded_secret", severity: "critical", summary: "A live payment API key is committed." });
         if (user.includes("SELECT")) findings.push({ kind: "vulnerability", severity: "high", summary: "SQL query built by string concatenation." });
         content = { purpose: "Handles orders", quality: 2, security_risk: findings.length ? "high" : "none", tests_present: false, findings };
       } else if (sys === README_SYSTEM) {
@@ -75,7 +75,7 @@ test("review, verify, tamper detection and closing audit", async () => {
 
   // No source in the receipt.
   const json = JSON.stringify(receipt);
-  assert.ok(!json.includes("sk_live_51HxQe2"), "secret leaked into receipt");
+  assert.ok(!json.includes("acmepay_live_9f3K"), "secret leaked into receipt");
   assert.ok(!json.includes("db.query"), "source leaked into receipt");
   assert.equal(receipt.files.length, 2, "binary and README excluded from per-file review");
 
