@@ -21,6 +21,7 @@ Two parties distrust each other. The founder wants a good report without reveali
 - **The orchestrator isn't in a TEE.** The CLI runs on the founder's machine. Tampering with the *results* is caught immediately; tampering with *which bytes were sent* is fully provable only at the closing audit.
 - **One key per model.** All instances of a NEAR AI model share one signing key, so a signature proves "an attested instance of this model", not a specific machine ([NEAR AI docs](https://docs.near.ai/cloud/verification/cloud-api/model-attestations)).
 - **Report shopping.** Rerunning until the score improves isn't prevented. The escrow pins one commit and one question pack; future work is to anchor every session nonce on-chain when the enclave is attested.
+- **Reasoning in v1 receipts.** Pack `standard-v1` let the model reason, and the reasoning came back inside the signed responses, so v1 receipts carry text that can paraphrase or quote the code. `standard-v2` turns reasoning off and the CLI refuses any answer that still contains it.
 - **Large files** over 48 KB are reviewed in part and marked "(truncated)" in the report.
 - **The model's judgement** is only as good as the model. Verification proves who said what, not that it's right.
 - **GPU check in the browser.** NVIDIA's service refuses browser requests, so the page reports that check as "needs the CLI" instead of passing it.

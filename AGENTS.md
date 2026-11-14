@@ -10,7 +10,8 @@ Attested technical diligence on a private repo: investors get a scorecard signed
 - `src/core/`: the protocol, browser-safe and shared with `web/app.ts`. Keep `process` and `node:` imports out of it.
 - `src/node/`: Node adapters (NEAR AI client, git snapshot, quote/GPU verifiers, review run, closing audit).
 - `src/cli/` commands; `src/cli.ts` entry point. Its path is printed in every DILIGENCE.md: never move it.
-- `src/core/pack.ts` (question pack) and `src/core/report.ts` (DILIGENCE.md renderer) are frozen formats. Any change to prompts or parameters changes `PACK_HASH`; any change to the rendered output breaks issued reports. `test/sample.test.ts` guards both against `docs/sample/`.
+- Question packs in `src/core/pack.ts` are never edited once issued: add a version and point `CURRENT_PACK` at it. `src/core/report.ts` (the DILIGENCE.md renderer) is frozen: any change to the output breaks issued reports. `test/sample.test.ts` guards both against `docs/sample/` (pack v1).
+- Samples: `docs/sample/` (Acme Orders, v1, escrow #2) and `docs/examples/ledgerline/` (v2, rebuilt from `examples/ledgerline/make-repo.sh`).
 
 ## Commands
 - `pnpm test`, `pnpm lint`, `pnpm format`, `pnpm build`.

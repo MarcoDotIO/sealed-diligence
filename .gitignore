@@ -5,3 +5,4 @@ target/
 *.local.json
 out/
 demo/video/out/
+.DS_Store

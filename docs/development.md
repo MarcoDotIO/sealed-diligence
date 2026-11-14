@@ -27,7 +27,8 @@ TypeScript 7 ships without the JavaScript API that typescript-eslint needs, so l
 ## Layout rules
 
 - **`src/core/` stays browser-safe.** No `node:` imports and no `process`. The web verifier bundles it.
-- **`src/core/pack.ts` and `src/core/report.ts` are frozen formats.** Changing a prompt or parameter changes `PACK_HASH`. Changing the report's output makes every issued `DILIGENCE.md` fail its byte-for-byte check. `test/sample.test.ts` catches both against the real, already-signed sample in `docs/sample/`.
+- **Question packs are never edited once issued.** Add a new version in `src/core/pack.ts` and point `CURRENT_PACK` at it; the closing audit uses the pack each receipt names. See [protocol](protocol.md#question-packs).
+- **`src/core/report.ts` is a frozen format.** Changing the report's output makes every issued `DILIGENCE.md` fail its byte-for-byte check. `test/sample.test.ts` catches that, and any change to the v1 pack, against the real, already-signed sample in `docs/sample/`.
 - **`src/cli.ts` must not move.** Every report prints `npx tsx src/cli.ts verify …`.
 - **Hash exact bytes.** Request and response bodies are hashed as sent and received; never re-serialize JSON before hashing.
 - **Fake secrets in fixtures must not match real provider formats** (GitHub push protection). The demo uses `acmepay_live_…`.
@@ -43,6 +44,7 @@ TypeScript 7 ships without the JavaScript API that typescript-eslint needs, so l
 
 Producing a report needs a NEAR AI Cloud API key in `NEAR_AI_API_KEY`. Keep it in the environment, never in a file in the repo. `NEAR_AI_BASE_URL` and `SEALED_DILIGENCE_MODEL` override the endpoint and the model (the model is part of the pack hash).
 
-## Regenerating the sample
+## Samples
 
-After a pack change, run a live review of `/tmp/acme-orders` against a new escrow request (see [escrow](escrow.md)). Copy `receipt.json` and `DILIGENCE.md` into `docs/sample/`, run `./scripts/build-web.sh` and `npx tsx scripts/readme-images.ts`, and update the request id quoted in the README and the docs.
+- `docs/sample/` is the video's Acme Orders report (pack `standard-v1`), paid for through escrow request `sealed-diligence.testnet#2`. It is kept as issued.
+- `docs/examples/ledgerline/` is a second, larger demo (pack `standard-v2`, no escrow). [`examples/ledgerline/`](../examples/ledgerline/) holds its source, a script that rebuilds the repo at the same commit, and a live-demo script.

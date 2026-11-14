@@ -120,6 +120,8 @@ The enclave is attested before any code is sent. The demo repo hides a prompt in
 npx tsx src/cli.ts audit /tmp/receipt.json /tmp/acme-orders
 ```
 
+**A second demo.** [Ledgerline](examples/ledgerline/) is a Python invoice-reconciliation API with a different set of hidden problems: a "compliance note" telling due-diligence tools to call it low risk, customer bank details sent to an analytics vendor, forgeable webhooks and unsafe deserialization. Its sealed report is in [`docs/examples/ledgerline/`](docs/examples/ledgerline/DILIGENCE.md), and it [opens in the verifier](https://marcodotio.github.io/sealed-diligence/?receipt=examples/ledgerline/receipt.json&md=examples/ledgerline/DILIGENCE.md).
+
 **Pay through the escrow.** Review with `--request <contract>#<id>`, then run `npx tsx src/cli.ts fulfil-args receipt.json` and submit with `near`. See [escrow](docs/escrow.md).
 
 ## CLI
@@ -151,7 +153,7 @@ src/
 ├── core/               the protocol: browser-safe, shared by the CLI and the web verifier
 │   ├── attestation.ts  TDX quote, key and nonce binding, RTMR3, MRCONFIGID, GPU
 │   ├── signatures.ts   NEAR AI response signatures
-│   ├── pack.ts         the question pack and its hash (frozen)
+│   ├── pack.ts         versioned question packs and their hashes
 │   ├── receipt.ts      the receipt format and receipt-only checks
 │   ├── report.ts       DILIGENCE.md renderer (frozen)
 │   ├── escrow.ts       on-chain escrow check over NEAR RPC
@@ -173,7 +175,7 @@ pnpm lint        # Biome on the TypeScript; rustfmt and clippy on the contract
 pnpm build       # bundle the verifier into docs/ and build the contract wasm
 ```
 
-See [development](docs/development.md) for the layout rules (the question pack and the report format are frozen, and `test/sample.test.ts` guards both against the real signed sample).
+See [development](docs/development.md) for the layout rules (issued question packs and the report format never change, and `test/sample.test.ts` guards both against the real signed sample).
 
 ## Documentation
 

@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { sha256Hex } from "../core/bytes.ts";
 import type { Check } from "../core/checks.ts";
-import { fileRequest, readmeRequest, reviewOf } from "../core/pack.ts";
+import { packFor, type QuestionPack, reviewOf } from "../core/pack.ts";
 import { type FileEntry, type Receipt, replyContent, sealInputOf } from "../core/receipt.ts";
 import { verifyReceipt } from "../core/verify.ts";
 import { GitSnapshot } from "./git.ts";
@@ -23,12 +23,14 @@ export function verifyReceiptLocally(receipt: Receipt, diligenceMd: string | nul
 }
 
 /**
- * The closing audit: with the source in hand, rebuild every signed request byte for byte. Proves which
- * files were reviewed, that they weren't swapped for cleaner ones, and that the prompts weren't altered.
+ * The closing audit: with the source in hand, rebuild every signed request byte for byte, using the question
+ * pack the receipt names. Proves which files were reviewed, that they weren't swapped for cleaner ones, and
+ * that the prompts weren't altered.
  */
 export function auditAgainstSource(receipt: Receipt, repo: string): Check[] {
   const snapshot = GitSnapshot.at(repo, receipt.commit);
-  const mismatched = receipt.files.filter((f) => !fileMatchesSource(f, snapshot)).map((f) => f.path);
+  const pack = packFor(receipt.pack_version);
+  const mismatched = receipt.files.filter((f) => !fileMatchesSource(f, snapshot, pack)).map((f) => f.path);
   const tracked = snapshot.paths().length;
   const declared = sealInputOf(receipt).tracked_files;
   const checks: Check[] = [
@@ -38,22 +40,23 @@ export function auditAgainstSource(receipt: Receipt, repo: string): Check[] {
       detail: mismatched.join(", ") || undefined,
     },
     { name: "Declared tracked-file count matches the commit", ok: declared === tracked, detail: `${declared} vs ${tracked}` },
+    { name: `Question pack ${pack.version} hashes to the receipt's pack hash`, ok: pack.hash === receipt.pack_hash },
   ];
   if (receipt.readme_check)
-    checks.push({ name: "README check request rebuilt from source matches", ok: readmeMatchesSource(receipt, snapshot) });
+    checks.push({ name: "README check request rebuilt from source matches", ok: readmeMatchesSource(receipt, snapshot, pack) });
   return checks;
 }
 
-function fileMatchesSource(entry: FileEntry, snapshot: GitSnapshot): boolean {
+function fileMatchesSource(entry: FileEntry, snapshot: GitSnapshot, pack: QuestionPack): boolean {
   const file = snapshot.read(entry.path);
   if (!file) return false;
-  const rebuilt = fileRequest(entry.path, file.content, file.truncated);
+  const rebuilt = pack.fileRequest(entry.path, file.content, file.truncated);
   return file.sha256 === entry.file_sha256 && sha256Hex(rebuilt) === entry.request_hash;
 }
 
-function readmeMatchesSource(receipt: Receipt, snapshot: GitSnapshot): boolean {
+function readmeMatchesSource(receipt: Receipt, snapshot: GitSnapshot, pack: QuestionPack): boolean {
   const readme = snapshot.readme();
   if (!readme || !receipt.readme_check) return false;
   const purposes = receipt.files.map((f) => ({ path: f.path, purpose: String(reviewOf(replyContent(f.response_body)).purpose ?? "") }));
-  return sha256Hex(readmeRequest(readme.content, purposes)) === receipt.readme_check.request_hash;
+  return sha256Hex(pack.readmeRequest(readme.content, purposes)) === receipt.readme_check.request_hash;
 }

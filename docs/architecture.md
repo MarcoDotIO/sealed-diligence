@@ -50,7 +50,7 @@ The dependency rule: `cli → node → core`, and `web → core`. Nothing in `co
 | `checks.ts` | The `Check` result type, the four check groups, and `allPassed`. |
 | `attestation.ts` | Verifies a NEAR AI model attestation (TDX quote, key and nonce binding, RTMR3 replay, MRCONFIGID, GPU). Defines the `EvidenceVerifiers` strategy and the session nonce. |
 | `signatures.ts` | Checks one NEAR AI response signature against the attested key. |
-| `pack.ts` | The question pack: model, prompts, parameters, request builders and `PACK_HASH`. Frozen (see [protocol](protocol.md)). |
+| `pack.ts` | Versioned question packs: model, prompts, parameters, request builders and hash. Issued packs never change (see [protocol](protocol.md#question-packs)). |
 | `receipt.ts` | The `Receipt` format and every check that needs only the receipt. |
 | `report.ts` | Renders `DILIGENCE.md` deterministically from a receipt. Frozen. |
 | `escrow.ts` | Reads the escrow request over NEAR RPC and compares it with the receipt. |
@@ -64,8 +64,8 @@ The dependency rule: `cli → node → core`, and `web → core`. Nothing in `co
 | `verifiers.ts` | `nodeVerifiers`: Intel quotes via dcap-qvl-node, GPU evidence via NVIDIA NRAS. |
 | `enclave.ts` | The `EnclaveClient` port, the `NearAiEnclave` adapter, and the `SignatureCheckingEnclave` decorator. |
 | `git.ts` | `GitSnapshot`: a repository frozen at one commit. |
-| `review.ts` | `runReview`: attest, review each file, check the README, seal, and build the receipt. |
-| `audit.ts` | Node-side `verifyReceiptLocally` and the closing audit against source. |
+| `review.ts` | `runReview`: attest, review each file, check the README, seal, and build the receipt. Refuses answers that were cut off or carry model reasoning. |
+| `audit.ts` | Node-side `verifyReceiptLocally` and the closing audit against source, using the pack the receipt names. |
 
 ## Design patterns
 

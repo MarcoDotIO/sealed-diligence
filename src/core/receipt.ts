@@ -60,6 +60,17 @@ export function replyContent(responseBody: string): string {
   return JSON.parse(responseBody).choices?.[0]?.message?.content ?? "";
 }
 
+/** Why the model stopped: `"stop"` normally, `"length"` when it ran out of its token budget. */
+export function finishReason(responseBody: string): string | undefined {
+  return JSON.parse(responseBody).choices?.[0]?.finish_reason;
+}
+
+/** Any reasoning text the model returned beside its answer (empty when reasoning was off). */
+export function reasoningOf(responseBody: string): string {
+  const message = JSON.parse(responseBody).choices?.[0]?.message ?? {};
+  return message.reasoning_content ?? message.reasoning ?? "";
+}
+
 /** The scorecard the seal returned. */
 export function scorecardOf(receipt: Receipt): Scorecard {
   return parseJsonReply<Scorecard>(replyContent(receipt.seal.response_body));

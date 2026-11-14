@@ -65,8 +65,9 @@ const review: Command = {
       enclave: new NearAiEnclave(apiKey, log),
       log,
     });
+    const report = renderDiligence(receipt);
     writeFileSync(join(outDir, "receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`);
-    writeFileSync(join(outDir, "DILIGENCE.md"), renderDiligence(receipt));
+    writeFileSync(join(outDir, "DILIGENCE.md"), report);
     const s = scorecardOf(receipt);
     console.log(`\n${s.verdict} · overall ${s.overall}/100 · injection attempts ${s.injection_attempts} · secrets ${s.hardcoded_secrets}`);
     console.log(`wrote ${outDir}/DILIGENCE.md and ${outDir}/receipt.json`);

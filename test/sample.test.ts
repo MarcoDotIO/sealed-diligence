@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { PACK_HASH } from "../src/core/pack.ts";
+import { CURRENT_PACK, packFor } from "../src/core/pack.ts";
 import { type Receipt, verifySignatures } from "../src/core/receipt.ts";
 import { renderDiligence } from "../src/core/report.ts";
 
@@ -11,8 +11,14 @@ const SAMPLE = new URL("../docs/sample/", import.meta.url);
 const receipt = JSON.parse(readFileSync(new URL("receipt.json", SAMPLE), "utf8")) as Receipt;
 const diligence = readFileSync(new URL("DILIGENCE.md", SAMPLE), "utf8");
 
-test("the question pack still hashes to the one the sample was signed under", () => {
-  assert.equal(PACK_HASH, receipt.pack_hash);
+test("the pack the sample was signed under still hashes the same", () => {
+  assert.equal(receipt.pack_version, "standard-v1");
+  assert.equal(packFor(receipt.pack_version).hash, receipt.pack_hash);
+});
+
+test("new reviews use a different, newer pack", () => {
+  assert.notEqual(CURRENT_PACK.version, receipt.pack_version);
+  assert.notEqual(CURRENT_PACK.hash, receipt.pack_hash);
 });
 
 test("the sample report re-renders byte for byte", () => {

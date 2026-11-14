@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { SEAL_SYSTEM } from "../src/core/pack.ts";
 import { type Receipt, scorecardOf, verifySignatures } from "../src/core/receipt.ts";
 import { renderDiligence } from "../src/core/report.ts";
 import { auditAgainstSource } from "../src/node/audit.ts";
@@ -87,4 +88,20 @@ test("the closing audit passes on the real source and catches a swapped file", a
   const cleaned = await review(repo);
   const swapped: Receipt = { ...receipt, files: cleaned.files.map((f, i) => ({ ...f, path: receipt.files[i].path })) };
   assert.ok(auditAgainstSource(swapped, repo).some((c) => c.ok === false));
+});
+
+test("an answer cut off by the token budget stops the review", async () => {
+  const enclave = await fakeEnclave({ finish: (system) => (system === SEAL_SYSTEM ? "length" : "stop") });
+  await assert.rejects(
+    runReview({ repo: makeRepo(), requestId: "req-1", repoLabel: "orders-api", enclave }),
+    /seal: the answer was cut off/,
+  );
+});
+
+test("a response carrying model reasoning never reaches a receipt", async () => {
+  const enclave = await fakeEnclave({ reasoning: () => "The file calls db.query with raw input" });
+  await assert.rejects(
+    runReview({ repo: makeRepo(), requestId: "req-1", repoLabel: "orders-api", enclave }),
+    /includes the model's reasoning/,
+  );
 });

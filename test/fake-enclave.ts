@@ -40,10 +40,22 @@ export const demoReplies: Replier = (system, user) => {
   };
 };
 
-export async function fakeEnclave(
-  replies: Replier = demoReplies,
-  attest?: (nonce: string, key: string) => Promise<Record<string, unknown>>,
-): Promise<EnclaveClient> {
+/** How the fake enclave behaves; every field defaults to an honest, well-behaved enclave. */
+export interface FakeEnclaveOptions {
+  /** The JSON answer for each request. */
+  replies?: Replier;
+  /** The attestation to return for a nonce. */
+  attest?: (nonce: string, key: string) => Promise<Record<string, unknown>>;
+  /** Why each completion stopped; `"length"` simulates an answer cut off by the token budget. */
+  finish?: (system: string) => "stop" | "length";
+  /** Reasoning text returned beside the answer (empty for none). */
+  reasoning?: (system: string) => string;
+}
+
+const reasoningField = (text: string) => (text ? { reasoning_content: text } : {});
+
+export async function fakeEnclave(options: FakeEnclaveOptions = {}): Promise<EnclaveClient> {
+  const { replies = demoReplies, attest, finish = () => "stop", reasoning = () => "" } = options;
   const secret = ed.utils.randomSecretKey();
   const enclaveKey = toHex(await ed.getPublicKeyAsync(secret));
   let calls = 0;
@@ -55,7 +67,10 @@ export async function fakeEnclave(
       const { messages } = JSON.parse(requestBody);
       const content = JSON.stringify(replies(messages[0].content, messages[1].content));
       const chatId = `chatcmpl-${++calls}`;
-      const responseBody = JSON.stringify({ id: chatId, choices: [{ message: { content } }] });
+      const responseBody = JSON.stringify({
+        id: chatId,
+        choices: [{ message: { content, ...reasoningField(reasoning(messages[0].content)) }, finish_reason: finish(messages[0].content) }],
+      });
       const requestHash = sha256Hex(requestBody);
       const text = `${MODEL}:${requestHash}:${sha256Hex(responseBody)}`;
       const signature = toHex(await ed.signAsync(new TextEncoder().encode(text), secret));

@@ -27,15 +27,22 @@ The CLI calls `GET /v1/attestation/report?model=<model>&provider=near&signing_al
 | App config | MRCONFIGID is `01 ‖ sha256(app_compose) ‖ 00×15` (dstack's layout) |
 | GPU | NVIDIA NRAS accepts the GPU evidence, whose nonce is the same session nonce |
 
-## Question pack
+## Question packs
 
-`src/core/pack.ts` defines the model (`deepseek-ai/DeepSeek-V4.1-Flash-1017`), three system prompts, `temperature: 0`, per-request `max_tokens`, and `response_format: json_object`. The pack hash commits to all of them:
+`src/core/pack.ts` defines versioned question packs. Each fixes the model (`deepseek-ai/DeepSeek-V4.1-Flash-1017`), the three system prompts, `temperature: 0`, per-request `max_tokens`, `response_format: json_object`, and any extra request options. The pack hash commits to all of them:
 
 ```
-PACK_HASH = sha256(JSON.stringify({ PACK_VERSION, MODEL, FILE_SYSTEM, README_SYSTEM, SEAL_SYSTEM, temperature, max_tokens }))
+pack_hash = sha256(JSON.stringify({ PACK_VERSION, MODEL, FILE_SYSTEM, README_SYSTEM, SEAL_SYSTEM, temperature, max_tokens[, request_options] }))
 ```
 
-The pack hash appears in the nonce, the seal input, the receipt and the escrow request, so the founder can't soften the questions. **Any change to the pack changes the hash.** Already-issued receipts then still verify (they carry their own pack hash), but they no longer match the pack in the code. Regenerate `docs/sample/` after changing it; `test/sample.test.ts` fails until you do.
+| Pack | Token budget (file / README / seal) | Request options | Hash | Status |
+|---|---|---|---|---|
+| `standard-v1` | 1200 / 1500 / 1500 | none | `c6bb1130…` | Retired. Issued the video sample (`docs/sample/`) |
+| `standard-v2` | 4096 / 6144 / 8192 | `chat_template_kwargs: { thinking: false }` | `f3344a26…` | Current |
+
+`standard-v1` let the model reason before answering. NEAR AI returns that reasoning inside the signed response, so the receipt (which must hold each response byte for byte) carried it, and reasoning can paraphrase or quote the code. It also used up v1's small budgets on repositories beyond a handful of files. `standard-v2` turns reasoning off. As a backstop, the CLI refuses to write a receipt if any answer contains reasoning text or was cut off by its budget.
+
+The pack hash appears in the nonce, the seal input, the receipt and the escrow request, so the founder can't soften the questions. **A pack is never edited once issued.** To change a prompt or parameter, add a new version to `PACKS` and point `CURRENT_PACK` at it. Receipts name their pack, verification needs nothing from the code's pack, and the closing audit rebuilds requests with the pack the receipt names. `test/sample.test.ts` checks that the v1 sample still hashes and renders exactly as signed.
 
 Every prompt fences the founder's material between `<<<BEGIN UNTRUSTED>>>` and `<<<END UNTRUSTED>>>` and makes any instruction inside it a finding of kind `injection_attempt`. Every prompt also forbids quoting code, secrets or URLs, because the answers are what the investor receives.
 
