@@ -19,6 +19,8 @@ const SIZE = { width: 1920, height: 1080 };
 const SHOT_VIEWPORT = { width: 880, height: 1000 };
 const SHOT_SCALE = 2;
 const VOICE_PAD = 0.9;
+/** Social platforms play around -14 LUFS; normalize so the voice isn't quiet next to other posts. */
+const LOUDNESS = "loudnorm=I=-14:TP=-1.5:LRA=11";
 const SAY_VOICE = "Samantha";
 const ELEVEN_DEFAULT_VOICE = "cjVigY5qzO86Huf0OWal"; // Eric: smooth, trustworthy
 
@@ -208,7 +210,7 @@ async function main(): Promise<void> {
   await browser.close();
   mixAudio(timeline, clips, clock, join(OUT, "voice.m4a"));
   const final = join(OUT, "sealed-diligence-demo.mp4");
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", join(OUT, "video.mp4"), "-i", join(OUT, "voice.m4a"), "-c:v", "copy", "-c:a", "copy", "-shortest", "-movflags", "+faststart", final]);
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", join(OUT, "video.mp4"), "-i", join(OUT, "voice.m4a"), "-c:v", "copy", "-af", LOUDNESS, "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", final]);
   console.log(`wrote ${final}`);
 }
 
