@@ -10,7 +10,7 @@ Organising idea: the dark editor is the founder's private side, light paper is w
 | Problem | editor shrinks and blurs; tape slaps across it; headline sets | shrink + tape slap on "won't hand it over", headline on "Now neither" |
 | 1 Request | `create_request` slip with the real fields | each row on "this commit", "these questions", "this enclave key", "fee in escrow"; request tape after "escrow" |
 | 2 Review | editor beside the enclave panel; command chip; attestation checks; each file's signed answer with its real signature; seal | chip on "one command", checks on "proves it's real hardware", files from "reviews each file" |
-| 3 Verify | the real verifier page: full width, then the report column, then the ringed red flag with the triggering code docked beneath, then the checks column | verdict on "do not proceed", flag on "the trick", code on "line five", ring on "red flag" |
+| 3 Verify | the real verifier page: full width, the "Enclave hardware" checks, the "Signed answers" checks, the verdict, then the ringed red flag with the triggering code docked beneath (scene ends there) | hardware checks on "Intel hardware attestation", signatures on "every signature", verdict on "do not proceed", flag on "the trick", code on "line five", ring on "red flag" |
 | 4 Tamper | `DILIGENCE.md`: the 8 is selected and retyped as 94; cut to the VOID tape and the failed check | select on "Eight", type on "becomes", cut and tear on "The seal breaks" |
 | 5 Settle | `fulfil` slip: the contract's checks, fee paid to the founder, FULFILLED stamp | checks on "checks the enclave's signature", fee and stamp on "releases the fee" |
 | Outro | headline, sealed tape with the real serial, verifier URL and repo | — |

@@ -119,6 +119,11 @@ async function verifierShot(browser: Browser, url: string, diligenceFile: string
       return [(r.x + scrollX) * scale, (r.y + scrollY) * scale, r.width * scale, r.height * scale];
     };
     const marks = { tape: rect(".tape-zone"), verdict: rect(".verdict-line"), status: rect("#status"), groups: rect("#groups"), report: rect(".report"), proof: rect(".proof") };
+    const headings = document.querySelectorAll("#groups h3");
+    if (headings[1]) {
+      const r = headings[1].getBoundingClientRect();
+      marks.signed = [(r.x + scrollX) * scale, (r.y + scrollY) * scale, r.width * scale, r.height * scale];
+    }
     if (document.querySelector("#flags li")) marks.flag = rect("#flags li");
     if (document.querySelector(".checks li.fail")) marks.failed = rect(".checks li.fail");
     return marks;
@@ -244,7 +249,7 @@ const SCRIPT = {
   problem: "An investor needs to know what's in this repo. The founder won't hand it over. Now neither has to trust the other.",
   request: "The investor opens a request on NEAR: this commit, these questions, this enclave key, with the fee in escrow.",
   review: "The founder runs one command. The NEAR A.I. enclave proves it's real hardware, reviews each file, and signs every answer. Only the signed answers leave.",
-  verify: "The investor's browser verifies everything. Verdict: do not proceed, eight out of a hundred. And the trick from line five is now a red flag.",
+  verify: "The investor's browser checks the Intel hardware attestation and every signature. Verdict: do not proceed, eight out of a hundred. And the trick from line five is now a red flag.",
   tamper: "So the founder edits the report. Eight becomes ninety-four. The seal breaks.",
   settle: "For the honest report, the contract checks the enclave's signature itself, and releases the fee.",
   outro: "Sealed Diligence. Verify it yourself.",
@@ -298,9 +303,17 @@ function scenes(sealed: { marks: Marks }, tampered: { marks: Marks }, vo: Record
   const sealAt = readmeAt + fileGap;
 
   // Verify: the camera arrives on each thing as it's said.
+  // Verify: the checks while they're named, then the verdict, then end on the red flag.
   const v = vo.verify;
+  const hardwareAt = beat(v, "Intel hardware attestation");
+  const signaturesAt = beat(v, "every signature");
   const flagAt = beat(v, "the trick");
-  const leaveFlag = beat(v, "red flag", 1.6);
+  // Each check view starts at its group heading ("Enclave hardware", "Signed answers"), so the list has its label.
+  const HEADING_TO_CENTER = 150;
+  const hardwareView = columnView(sealed.marks.proof, sealed.marks.groups[1] + HEADING_TO_CENTER);
+  const signedView = columnView(sealed.marks.proof, sealed.marks.signed[1] + HEADING_TO_CENTER);
+  const verdictView = columnView(sealed.marks.report, center(sealed.marks.verdict).cy + 140);
+  const flagView = columnView(sealed.marks.report, center(sealed.marks.flag).cy + 90);
 
   // Tamper: select on "edits the report", type on "becomes", cut on "seal breaks".
   const t = vo.tamper;
@@ -352,16 +365,18 @@ function scenes(sealed: { marks: Marks }, tampered: { marks: Marks }, vo: Record
       type: "shot", step: ["3", "The investor checks the seal"], url: `${VERIFIER_URL}/?view=report`, image: "verified.png",
       camera: [
         { t: 0, ...fullWidthBelow(sealed.marks.tape[1]) },
-        { t: beat(v, "Verdict", -0.2), ...fullWidthBelow(sealed.marks.tape[1]) },
-        { t: beat(v, "do not proceed", 0.3), ...columnView(sealed.marks.report, center(sealed.marks.verdict).cy + 140) },
-        { t: flagAt - 0.3, ...columnView(sealed.marks.report, center(sealed.marks.verdict).cy + 140) },
-        { t: flagAt + 0.6, ...columnView(sealed.marks.report, center(sealed.marks.flag).cy + 90) },
-        { t: leaveFlag, ...columnView(sealed.marks.report, center(sealed.marks.flag).cy + 90) },
-        { t: leaveFlag + 1.4, ...columnView(sealed.marks.proof, sealed.marks.groups[1] + 330) },
+        { t: hardwareAt - 0.5, ...fullWidthBelow(sealed.marks.tape[1]) },
+        { t: hardwareAt + 0.5, ...hardwareView },
+        { t: signaturesAt - 0.5, ...hardwareView },
+        { t: signaturesAt + 0.3, ...signedView },
+        { t: beat(v, "Verdict"), ...signedView },
+        { t: beat(v, "do not proceed", 0.3), ...verdictView },
+        { t: flagAt - 0.3, ...verdictView },
+        { t: flagAt + 0.6, ...flagView },
       ],
-      rings: [{ rect: sealed.marks.flag, from: beat(v, "red flag", -0.2), to: leaveFlag }],
-      inset: { under: 0, at: Math.max(beat(v, "line five"), flagAt + 0.75), to: leaveFlag, caption: "src/server.ts, the comment it caught", lines: injectionLines.map((n) => ({ n, text: server.lines[n - 1] })) },
-      minDur: Math.max(VOICE_LEAD + v.duration + TAIL, leaveFlag + 3.0),
+      rings: [{ rect: sealed.marks.flag, from: beat(v, "red flag", -0.2) }],
+      inset: { under: 0, at: Math.max(beat(v, "line five"), flagAt + 0.75), caption: "src/server.ts, the comment it caught", lines: injectionLines.map((n) => ({ n, text: server.lines[n - 1] })) },
+      minDur: Math.max(VOICE_LEAD + v.duration + TAIL, beat(v, "red flag", 2.6)),
     }),
     voiced(t, {
       type: "tamper", step: ["4", "The founder edits the report"],
