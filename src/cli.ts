@@ -7,6 +7,7 @@ import { runReview } from "./review.ts";
 import { renderDiligence } from "./render.ts";
 import { auditAgainstSource, loadReceipt, verifyReceipt } from "./verify.ts";
 import { scorecardOf, type VerifyLine } from "./receipt.ts";
+import { signatureBytes } from "./sig.ts";
 
 const USAGE = `sealed-diligence <command>
 
@@ -19,6 +20,9 @@ const USAGE = `sealed-diligence <command>
 
   audit <receipt.json> <repo>
       At closing, with source access: rebuild every signed request from the source and compare.
+
+  fulfil-args <receipt.json> [--out fulfil-args.json]
+      Arguments for the escrow contract's fulfil call (review with --request <contract>#<id>).
 `;
 
 function flag(args: string[], name: string, def?: string) {
@@ -60,6 +64,15 @@ async function main() {
     const md = mdPath ? readFileSync(mdPath, "utf8") : undefined;
     console.log(`Verifying ${receipt.repo_label} @ ${receipt.commit.slice(0, 12)} (request ${receipt.request_id})`);
     process.exitCode = print(await verifyReceipt(receipt, md, { skipGpu: args.includes("--skip-gpu") })) ? 0 : 1;
+  } else if (cmd === "fulfil-args") {
+    // Arguments for the escrow contract's `fulfil` call, built from the receipt.
+    const receipt = loadReceipt(args[0]);
+    const id = Number(receipt.request_id.split("#").pop());
+    if (!Number.isInteger(id)) throw new Error(`request id ${receipt.request_id} is not an escrow request (<contract>#<n>)`);
+    const sig = receipt.seal.signature;
+    const out = { id, seal_request_body: receipt.seal.request_body, seal_text: sig.text, signature_hex: Buffer.from(signatureBytes(sig.signature)).toString("hex") };
+    writeFileSync(flag(args, "--out", "fulfil-args.json")!, JSON.stringify(out));
+    console.log(`wrote ${flag(args, "--out", "fulfil-args.json")} for request ${receipt.request_id}`);
   } else if (cmd === "audit") {
     const receipt = loadReceipt(args[0]);
     console.log(`Closing audit of ${receipt.repo_label} @ ${receipt.commit.slice(0, 12)} against ${args[1]}`);

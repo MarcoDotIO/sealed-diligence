@@ -17,10 +17,16 @@ importers:
       '@phala/dcap-qvl-node':
         specifier: ^0.3.3
         version: 0.3.3
+      '@phala/dcap-qvl-web':
+        specifier: ^0.3.3
+        version: 0.3.3
     devDependencies:
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
@@ -195,6 +201,9 @@ packages:
 
   '@phala/dcap-qvl-node@0.3.3':
     resolution: {integrity: sha512-Iakz7N6VfWXWfgDkgJ5PFr414UV8BD3mk9ssEd0sFFiGNgiAwzD/wE2zwsGRya7qYYC+R8rvg4uEHXQfu1ArAQ==}
+
+  '@phala/dcap-qvl-web@0.3.3':
+    resolution: {integrity: sha512-pCSZVCMT13K5dAU+Cb5TURT0GXZ6MKvHfgQxUbELAMY8OiQglztpVN42WOjUt17z2iQjBHUWhpwodPgGO+D+CQ==}
 
   '@types/node@26.6.6':
     resolution: {integrity: sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==}
@@ -427,6 +436,8 @@ snapshots:
   '@noble/hashes@2.4.0': {}
 
   '@phala/dcap-qvl-node@0.3.3': {}
+
+  '@phala/dcap-qvl-web@0.3.3': {}
 
   '@types/node@26.6.6':
     dependencies:
