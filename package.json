@@ -1,0 +1,28 @@
+{
+  "name": "sealed-diligence",
+  "version": "0.1.0",
+  "description": "Attested technical diligence on a private repo: investors get a scorecard signed inside a NEAR AI TEE without ever seeing the source.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "sealed-diligence": "./src/cli.ts"
+  },
+  "scripts": {
+    "diligence": "tsx src/cli.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@noble/ed25519": "^3.2.0",
+    "@noble/hashes": "^2.4.0",
+    "@phala/dcap-qvl-node": "^0.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
