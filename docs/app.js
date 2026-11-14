@@ -2032,11 +2032,15 @@ function fileRow(f) {
   const name = `\`${cell(f.path)}\`${f.truncated ? " (truncated)" : ""}`;
   return `| ${name} | ${cell(review.security_risk)} | ${cell(review.quality)}/5 | ${cell(findings)} |`;
 }
+function coverageLine(input) {
+  const readme = input.readme_check ? " The README is checked against the code separately." : "";
+  return `${input.reviewed_files} of ${input.tracked_files} tracked files reviewed one by one (source and config; docs, lockfiles, build output and binaries skipped).${readme}`;
+}
 function fileSection(input) {
   return [
     "## Files reviewed",
     "",
-    `${input.reviewed_files} of ${input.tracked_files} tracked files (source and config; lockfiles, build output and binaries skipped).`,
+    coverageLine(input),
     "",
     "| File | Risk | Quality | Findings |",
     "|---|---|---|---|",

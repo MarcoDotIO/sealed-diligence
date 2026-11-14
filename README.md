@@ -24,7 +24,7 @@ You see each check pass: the Intel TDX quote, the enclave key and session nonce 
 
 Or open the browser verifier at `docs/index.html` (served at the GitHub Pages link in the repo description) and click **Verify the sample report**. It runs the same checks in your browser, including full Intel quote verification. NVIDIA's service doesn't accept browser requests, so that one check points you to the CLI.
 
-**2. See tampering caught.** Edit any score in `docs/sample/DILIGENCE.md` (for example change `overall 34/100` to `overall 94/100`) and run the same command. The `DILIGENCE.md matches the signed scorecard exactly` line fails and the result is `NOT VERIFIED`. In the browser, click **Sample with an edited score**.
+**2. See tampering caught.** Edit any score in `docs/sample/DILIGENCE.md` (for example change `overall 8/100` to `overall 94/100`) and run the same command. The `DILIGENCE.md matches the signed scorecard exactly` line fails and the result is `NOT VERIFIED`. In the browser, click **Sample with an edited score**.
 
 **3. Run a sealed review yourself.**
 
@@ -100,7 +100,7 @@ founder's machine                         NEAR AI Cloud enclave (TDX + H100/H200
 ## NEAR pieces
 
 - **NEAR AI Cloud** private inference, model attestation (Intel TDX quote via `dcap-qvl`, RTMR3 event-log replay, MRCONFIGID, NVIDIA NRAS), and ed25519 `provider_tee` response signatures. Model: `deepseek-ai/DeepSeek-V4.1-Flash-1017` (NEAR-operated).
-- **Escrow contract** (`contract/`, near-sdk 5): `create_request` pins founder, commit, pack hash, model and enclave key with an attached fee; `fulfil` checks the seal with `env::ed25519_verify` and that the signed request body names this request, commit and pack, then pays the founder; `refund` after the deadline. Deployed on testnet at [`sealed-diligence.testnet`](https://explorer.testnet.near.org/accounts/sealed-diligence.testnet); see [Escrow on testnet](#escrow-on-testnet).
+- **Escrow contract** (`contract/`, near-sdk 5): `create_request` pins founder, commit, pack hash, model and enclave key with an attached fee; `fulfil` checks the seal with `env::ed25519_verify` and that the signed request body names this request, commit and pack, then pays the founder; `refund` after the deadline. Deployed on testnet at [`sealed-diligence.testnet`](https://explorer.testnet.near.org/accounts/sealed-diligence.testnet); see [Escrow on testnet](#escrow-on-testnet). The sample report in `docs/sample/` was paid for through it: request `sealed-diligence.testnet#1`, [fulfilled on-chain](https://explorer.testnet.near.org/transactions/zjp7gQeEQQnEWUEMYagErMzoYcRqWob2sgcbFWLQzbG) after the contract verified the enclave's signature.
 
 ## Escrow on testnet
 

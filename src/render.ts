@@ -59,11 +59,16 @@ function fileRow(f: SealInput["files"][number]): string {
   return `| ${name} | ${cell(review.security_risk)} | ${cell(review.quality)}/5 | ${cell(findings)} |`;
 }
 
+function coverageLine(input: SealInput): string {
+  const readme = input.readme_check ? " The README is checked against the code separately." : "";
+  return `${input.reviewed_files} of ${input.tracked_files} tracked files reviewed one by one (source and config; docs, lockfiles, build output and binaries skipped).${readme}`;
+}
+
 function fileSection(input: SealInput): string[] {
   return [
     "## Files reviewed",
     "",
-    `${input.reviewed_files} of ${input.tracked_files} tracked files (source and config; lockfiles, build output and binaries skipped).`,
+    coverageLine(input),
     "",
     "| File | Risk | Quality | Findings |",
     "|---|---|---|---|",
